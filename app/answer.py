@@ -62,7 +62,28 @@ def build_messages(question: str, hits: list[Hit]) -> list[dict]:
     return [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user}]
 
 
-_MARKER = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
+# Fenced blocks (including one left open by a cut-off answer) and inline code spans:
+# markers and spacing inside them are never rewritten (`git add .`, `${arr[0]}`).
+_CODE = re.compile(r"(```[\s\S]*?(?:```|$)|`[^`\n]+`)")
+# [2], [1, 3], [1-2] and footnote-style [^1]. Blanks before a marker belong to it, so a
+# dropped marker leaves no stray space before the punctuation that follows.
+_MARKER = re.compile(r"([ \t]*)\[\^?(\d+(?:\s*[,–-]\s*\^?\d+)*)\]")
+# An uncited answer gets the top hits as sources, except declines and "I couldn't find this".
+_NON_ANSWER = ("couldn't find", "could not find", "can only help", "can only answer", "only help with",
+               "only answer questions", "can't help", "cannot help", "not able to", "sorry")
+FALLBACK_SOURCES = 3
+
+
+def _marker_numbers(spec: str) -> list[int]:
+    """'1, 3' -> [1, 3]; '1-3' -> [1, 2, 3]."""
+    nums = []
+    for part in spec.split(","):
+        bounds = [int(x) for x in re.findall(r"\d+", part)]
+        if len(bounds) == 2 and 0 < bounds[1] - bounds[0] < 20:
+            nums.extend(range(bounds[0], bounds[1] + 1))
+        else:
+            nums.extend(bounds)
+    return nums
 
 
 def finalize(raw: str, hits: list[Hit]) -> tuple[str, list[str], list[dict]]:
@@ -70,6 +91,7 @@ def finalize(raw: str, hits: list[Hit]) -> tuple[str, list[str], list[dict]]:
 
     Returns (answer, page-level source URLs, detailed citations for the widget).
     Several chunks from one page collapse into one source; invalid markers are dropped.
+    Code blocks and inline code are returned exactly as the model wrote them.
     """
     page_index: dict[str, int] = {}
     citations: list[dict] = []
@@ -86,15 +108,19 @@ def finalize(raw: str, hits: list[Hit]) -> tuple[str, list[str], list[dict]]:
 
     def replace(m: re.Match) -> str:
         nums = []
-        for part in m.group(1).split(","):
-            n = source_number(int(part))
+        for chunk_no in _marker_numbers(m.group(2)):
+            n = source_number(chunk_no)
             if n is not None and n not in nums:
                 nums.append(n)
-        return "".join(f"[{n}]" for n in nums)
+        return m.group(1) + "".join(f"[{n}]" for n in nums) if nums else ""
 
     if leaks_prompt(raw):
         return DECLINE, [], []
-    answer = _MARKER.sub(replace, raw)
-    answer = re.sub(r"(\[\d+\])\1+", r"\1", answer)  # [1][1] -> [1]
-    answer = re.sub(r"[ \t]+([.,;:])", r"\1", answer).strip()
+    parts = _CODE.split(raw)  # odd indices are code
+    for i in range(0, len(parts), 2):
+        parts[i] = re.sub(r"(\[\d+\])\1+", r"\1", _MARKER.sub(replace, parts[i]))  # [1][1] -> [1]
+    answer = "".join(parts).strip()
+    if not citations and not any(m in answer.lower().replace("’", "'") for m in _NON_ANSWER):
+        for chunk_no in range(1, min(FALLBACK_SOURCES, len(hits)) + 1):
+            source_number(chunk_no)
     return answer, [c["url"] for c in citations], citations

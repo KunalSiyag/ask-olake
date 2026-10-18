@@ -26,6 +26,9 @@ DATA = Path(os.getenv("DATA_DIR", "data"))
 INTERVAL_S = int(os.getenv("REFRESH_INTERVAL_S", "600"))
 DOCS_REPO = "olake-docs"
 MAX_DEPLOY_WAIT_CYCLES = 6  # ~1h for the website to pick up a docs commit
+# docs.scrape() skips pages that fail to download, so a scrape with fewer pages than this
+# share of the current ones means timeouts or rate limits, not deleted docs.
+MIN_SCRAPE_RATIO = 0.95
 WEBSITE_TYPES = {"docs", "blog"}  # both come from the olake.io scrape
 
 
@@ -92,13 +95,17 @@ class Refresher:
                 else:
                     old_docs = [s for s in sections if s["source_type"] in WEBSITE_TYPES]
                     new_docs = docs.scrape(cache=False)
-                    if new_docs and docs.content_hash(new_docs) != docs.content_hash(old_docs):
+                    old_pages, new_pages = {s["page_url"] for s in old_docs}, {s["page_url"] for s in new_docs}
+                    complete = len(new_pages) >= MIN_SCRAPE_RATIO * len(old_pages)
+                    if not complete:
+                        self.status["last_incomplete_scrape"] = f"{_now()}: {len(new_pages)} of {len(old_pages)} pages"
+                    if new_docs and complete and docs.content_hash(new_docs) != docs.content_hash(old_docs):
                         sections = [s for s in sections if s["source_type"] not in WEBSITE_TYPES] + new_docs
                         self.heads[DOCS_REPO] = head
                         self.status["pending_docs_cycles"] = 0
                         changes.append(f"docs ({len(new_docs)} sections)")
                     else:
-                        # website not redeployed yet; retry next cycle, give up after a while
+                        # website not redeployed yet, or the scrape was incomplete: retry next cycle, give up after a while
                         self.status["pending_docs_cycles"] += 1
                         if self.status["pending_docs_cycles"] >= MAX_DEPLOY_WAIT_CYCLES:
                             self.heads[DOCS_REPO] = head
