@@ -9,7 +9,7 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ingest import docs, repos
+from ingest import docs, issues, repos
 from ingest.chunk import make_chunks
 
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "minishlab/potion-base-8M")
@@ -18,7 +18,7 @@ OUT = Path("data")
 
 
 def main() -> None:
-    sections = docs.scrape() + repos.collect()
+    sections = docs.scrape() + repos.collect() + issues.collect()
     chunks = make_chunks(sections)
     OUT.mkdir(exist_ok=True)
     with open(OUT / "chunks.jsonl", "w") as f:
