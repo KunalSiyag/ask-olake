@@ -4,6 +4,7 @@ then a cheap heuristic rerank.
 CLI: uv run python -m app.search "how do I enable CDC for postgres?"
 """
 
+import difflib
 import hashlib
 import json
 import os
@@ -59,6 +60,17 @@ def tokenize(text: str) -> list[str]:
     return tokens
 
 
+DEFINITION_Q = re.compile(r"^\s*(what\s+(is|are|'s)|what's|whats|explain|tell me about|define|describe|overview of)\b", re.I)
+INTRO_URL = re.compile(r"(olake\.io/docs/$|/overview/|/introduction/|/getting-started/overview|/core/architecture/|/use-cases/)")
+INTRO_HEADING = re.compile(r"\b(what is|what are|overview|introduction|welcome)\b", re.I)
+
+
+def is_intro(chunk: dict) -> bool:
+    if "/release/" in chunk["page_url"]:  # release-notes "overview" pages are not introductions
+        return False
+    return bool(INTRO_URL.search(chunk["page_url"]) or INTRO_HEADING.search(chunk["title"]))
+
+
 def embed_text(chunk: dict) -> str:
     return f"{chunk['title']}\n{chunk['text']}"
 
@@ -98,8 +110,14 @@ class SearchIndex:
                  chunks: list[dict] | None = None, previous: "SearchIndex | None" = None):
         from_disk = chunks is None
         self.chunks = [json.loads(line) for line in open(data_dir / "chunks.jsonl")] if from_disk else chunks
-        self.bm25 = BM25Okapi([tokenize(embed_text(c)) for c in self.chunks])
+        corpus_tokens = [tokenize(embed_text(c)) for c in self.chunks]
+        self.bm25 = BM25Okapi(corpus_tokens)
         self.title_tokens = [set(tokenize(c["title"])) for c in self.chunks]
+        self.intro = [is_intro(c) for c in self.chunks]
+        # vocabulary bucketed by first letter, for typo correction of unknown query words
+        self.vocab: dict[str, list[str]] = {}
+        for word in {t for toks in corpus_tokens for t in toks if t.isalpha() and len(t) >= 4}:
+            self.vocab.setdefault(word[0], []).append(word)
 
         self.model, self.vectors = None, None
         model_name = os.getenv("EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL) if embedding_model is None else embedding_model
@@ -119,8 +137,21 @@ class SearchIndex:
     def vectors_by_key(self) -> dict[str, np.ndarray]:
         return {text_key(c): v for c, v in zip(self.chunks, self.vectors)}
 
+    def correct(self, tokens: list[str]) -> list[str]:
+        """Replace query words that appear nowhere in the corpus (typos like "fushion")
+        with the closest corpus word; known words are never touched."""
+        out = []
+        for tok in tokens:
+            if tok in self.bm25.idf or not tok.isalpha() or len(tok) < 5:
+                out.append(tok)
+                continue
+            candidates = [w for w in self.vocab.get(tok[0], []) if abs(len(w) - len(tok)) <= 2]
+            match = difflib.get_close_matches(tok, candidates, n=1, cutoff=0.8)
+            out.append(match[0] if match else tok)
+        return out
+
     def search(self, query: str, k: int = 8, per_page: int = 2, pool: int = 50) -> list[Hit]:
-        q_tokens = tokenize(query)
+        q_tokens = self.correct(tokenize(query))
         bm25 = self.bm25.get_scores(q_tokens) if q_tokens else np.zeros(len(self.chunks))
         rankings = [np.argsort(-bm25)[:pool]]
 
@@ -131,9 +162,19 @@ class SearchIndex:
             cosine = self.vectors @ q
             rankings.append(np.argsort(-cosine)[:pool])
 
-        # Reciprocal Rank Fusion: each list contributes 1/(k + rank)
+        weights = [1.0, EMB_WEIGHT][: len(rankings)]
+        definition = bool(DEFINITION_Q.match(query))
+        if definition:
+            # "what is X?" questions whose only content word is everywhere (e.g. "olake") never
+            # surface the intro pages on their own, so rank intro/overview sections as a third list
+            intro_idx = np.flatnonzero(self.intro)
+            order = np.lexsort((-bm25[intro_idx], -cosine[intro_idx]))
+            rankings.append(intro_idx[order][:pool])
+            weights.append(1.0)
+
+        # Reciprocal Rank Fusion: each list contributes weight/(k + rank)
         fused: dict[int, float] = {}
-        for weight, ranking in zip((1.0, EMB_WEIGHT), rankings):
+        for weight, ranking in zip(weights, rankings):
             for rank, idx in enumerate(ranking):
                 fused[int(idx)] = fused.get(int(idx), 0.0) + weight / (RRF_K + rank + 1)
 
@@ -148,6 +189,8 @@ class SearchIndex:
             s *= SOURCE_WEIGHT.get(c["source_type"], 0.7)
             if wants_fusion and c["product"] == "fusion":
                 s *= 1.2
+            if definition and self.intro[idx]:
+                s *= 1.6  # "what is X?" -> prefer intro/overview pages and "What is ..." sections
             scored.append((s, idx))
         scored.sort(reverse=True)
 

@@ -70,6 +70,8 @@ curl -X POST https://ask-olake-nh7j.onrender.com/ask -H 'Content-Type: applicati
 | BM25 + embeddings, weight 0.25 | 97% |
 | **BM25 + embeddings, weight 0.5 (shipped)** | **100%** |
 
+**"What is X?" questions and typos.** "olake" appears in almost every chunk, so keyword search can't rank "What is OLake?" by itself. Definition questions (what is / what are / explain / tell me about…) add a third ranked list of intro/overview sections and boost them; release-notes "overview" pages are excluded. Query words that appear nowhere in the corpus are mapped to the closest corpus word ("fushion" → "fusion", "compacton" → "compaction"); known words, including identifiers, are never changed.
+
 **Reranking without a reranker model.** No reranker model is available on the key, and a cross-encoder is too slow on a 0.1-CPU instance. So there's a free heuristic pass (title overlap, source trust, Fusion boost, max 2 chunks per page for diversity), and then the LLM acts as the final reranker: it sees 8 candidates and cites only those it uses.
 
 **Honesty is enforced in code, not just in the prompt:**
@@ -98,6 +100,7 @@ So DeepSeek is primary, with OpenRouter's `models` fallback chain to Gemini, the
 |---|---|
 | Availability | Render free plan + external keep-alive pinger; the index is baked into the image, so startup is fast; a live refresh never takes the old index offline |
 | Budget ($3 event credit) | Per-IP rate limit, a **global daily LLM-call cap**, an answer cache, $0 "I don't know" path, `max_tokens` 500, reasoning off |
+| GitHub / docs-site outages | `/ask` never calls GitHub or olake.io; it answers from the in-memory index. The background refresher catches every error, reports it in `/version` → `live_refresh.last_error`, and keeps serving the current index. A refresh builds the new index beside the old one and swaps it in atomically (measured peak: 252 MB of 512 MB). |
 | LLM failures | OpenRouter model fallback chain, SDK retries with backoff on 429/5xx, timeout, graceful error still in the API contract shape |
 | Input safety | Length cap, JSON validation, prompt-injection rules; the widget HTML-escapes all model output |
 | Observability | Structured JSON logs per request (question, model, sources, latency, cache hit) and feedback events; `/healthz`; `/version` shows build time and corpus size |
@@ -144,7 +147,7 @@ uv run python -m eval.run answer http://localhost:8000   # end-to-end: cited-sou
 |---|---|---|---|
 | Written with the system | 97% | 94–100% | 6/6 |
 | Independent hard set | 92% | 92–96% | 5/5 |
-| Probes | 100% (was 85%) | 95% | — |
+| Probes (24, incl. "What is OLake?" and the typo "fushion") | 100% (was 85%), MRR 0.85 | 95% | — |
 
 Light stemming (indexed **next to** the original token, so exact identifiers still win) fixed "partition" vs "partitioning"-style misses: total retrieval hits across the three sets went 76 → 78 of 81.
 

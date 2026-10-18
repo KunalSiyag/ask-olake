@@ -18,3 +18,7 @@
 {"question": "Can OLake write to Azure ADLS or Google Cloud Storage?", "expected": ["https://olake.io/docs/writers/iceberg/azure/", "https://olake.io/docs/writers/iceberg/gcp/", "https://olake.io/docs/writers/parquet/gcs/"]}
 {"question": "What does the discover command generate?", "expected": ["https://olake.io/docs/install/docker-cli/", "https://olake.io/docs/community/commands-and-flags/", "https://olake.io/docs/core/configs/catalog/"]}
 {"question": "What does max_threads control?", "expected": ["https://olake.io/docs/connectors/postgres/", "https://olake.io/docs/getting-started/job-level-properties/", "https://olake.io/docs/community/commands-and-flags/", "https://olake.io/docs/connectors/mysql/", "https://olake.io/docs/connectors/kafka/"]}
+{"question": "What is Olake?", "expected": ["https://olake.io/docs/", "https://olake.io/docs/core/architecture/", "https://olake.io/docs/core/use-cases/"]}
+{"question": "WHat is OLake fushion?", "expected": ["https://olake.io/docs/fusion/getting-started/overview/", "https://olake.io/docs/fusion/core/use-cases/"]}
+{"question": "What is OLake Fusion?", "expected": ["https://olake.io/docs/fusion/getting-started/overview/", "https://olake.io/docs/fusion/core/use-cases/"]}
+{"question": "what is olake go", "expected": ["https://olake.io/docs/", "https://olake.io/docs/core/architecture/"]}
