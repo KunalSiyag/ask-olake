@@ -1,0 +1,10 @@
+{
+  "built_at": "2026-10-18T05:02:17+00:00",
+  "chunks": 1956,
+  "pages": 222,
+  "by_source": {
+    "docs": 1267,
+    "repo": 689
+  },
+  "embedding_model": "minishlab/potion-base-8M"
+}

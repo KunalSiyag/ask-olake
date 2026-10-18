@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ask OLake · docs assistant demo</title>
+<style>
+  :root { --bg:#fff; --fg:#1c1e21; --muted:#606770; --border:#e3e5e8; --side:#f7f8fa; --accent:#2563eb; --code:#f2f4f7; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#1b1b1d; --fg:#e3e3e3; --muted:#a0a4ab; --border:#303236; --side:#232427; --accent:#60a5fa; --code:#2a2c30; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 16px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--fg); }
+  nav.top { height: 60px; display: flex; align-items: center; gap: 24px; padding: 0 24px; border-bottom: 1px solid var(--border); }
+  nav.top b { font-size: 18px; } nav.top a { color: var(--muted); text-decoration: none; font-size: 15px; }
+  .layout { display: grid; grid-template-columns: 260px 1fr; min-height: calc(100vh - 60px); }
+  aside { background: var(--side); border-right: 1px solid var(--border); padding: 20px 16px; font-size: 14px; }
+  aside p { margin: 14px 0 6px; font-weight: 600; } aside a { display: block; color: var(--muted); text-decoration: none; padding: 3px 8px; border-radius: 6px; }
+  aside a.on { background: rgba(37,99,235,.1); color: var(--accent); }
+  main { padding: 40px 48px; max-width: 860px; }
+  h1 { font-size: 34px; margin: 0 0 8px; } h2 { margin-top: 36px; }
+  code, pre { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 14px; }
+  pre { background: var(--code); padding: 14px 16px; border-radius: 8px; overflow-x: auto; }
+  .lead { color: var(--muted); font-size: 18px; }
+  .cta { display: inline-block; margin-top: 8px; padding: 10px 16px; border-radius: 8px; background: var(--accent); color: #fff; border: none; font: inherit; font-weight: 600; cursor: pointer; }
+  .tries { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .tries button { border: 1px solid var(--border); background: var(--bg); color: var(--fg); padding: 6px 12px; border-radius: 999px; cursor: pointer; font: inherit; font-size: 14px; }
+  .tries button:hover { border-color: var(--accent); }
+  @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } aside { display: none; } main { padding: 24px 16px; } }
+</style>
+</head>
+<body>
+<nav class="top"><b>OLake Docs <span style="color:var(--muted);font-weight:400">(demo host page)</span></b><a href="https://olake.io/docs/">Real docs ↗</a><a href="/version">API version</a></nav>
+<div class="layout">
+  <aside>
+    <p>Getting started</p><a class="on" href="#">Ask OLake demo</a><a href="#embed">Embed the widget</a><a href="#api">Use the API</a>
+    <p>Sources</p><a href="#">Postgres</a><a href="#">MySQL</a><a href="#">MongoDB</a><a href="#">Kafka</a>
+    <p>OLake Fusion</p><a href="#">Compaction</a><a href="#">Catalogs</a>
+  </aside>
+  <main>
+    <h1>Ask OLake</h1>
+    <p class="lead">A docs assistant for OLake and OLake Fusion. It answers only from the official docs and GitHub repos, cites every source, and says so when it doesn't know.</p>
+    <button class="cta" onclick="AskOLake.open()">Open the assistant</button> <span style="color:var(--muted)">or click the bubble in the corner.</span>
+    <div class="tries">
+      <button onclick="AskOLake.ask(this.textContent)">How do I set up CDC for Postgres?</button>
+      <button onclick="AskOLake.ask(this.textContent)">How do I configure AWS Glue as the catalog?</button>
+      <button onclick="AskOLake.ask(this.textContent)">How do I deploy OLake on Kubernetes?</button>
+      <button onclick="AskOLake.ask(this.textContent)">What does OLake Fusion compaction do?</button>
+    </div>
+
+    <h2 id="embed">Embed it in any docs site</h2>
+    <p>One script tag. The widget renders inside a Shadow DOM, so it can't break your site's CSS, and your CSS can't break it.</p>
+    <pre><code id="snippet"></code></pre>
+    <p>Options: <code>data-theme="auto|light|dark"</code>, <code>data-position="right|left"</code>, <code>data-open="true"</code>. JS API: <code>AskOLake.open()</code>, <code>AskOLake.ask("question")</code>.</p>
+
+    <h2 id="api">Or call the API directly</h2>
+    <pre><code id="curl"></code></pre>
+    <p>Response: <code>{"answer": "...", "sources": ["https://olake.io/docs/..."]}</code></p>
+  </main>
+</div>
+<script>
+  var origin = location.origin;
+  document.getElementById("snippet").textContent = '<script src="' + origin + '/widget.js" defer><\/script>';
+  document.getElementById("curl").textContent = "curl -X POST " + origin + "/ask \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"question\": \"How do I set up CDC for Postgres?\"}'";
+</script>
+<script src="/widget.js" defer></script>
+</body>
+</html>
