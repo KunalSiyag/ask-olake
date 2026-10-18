@@ -260,10 +260,9 @@ If behind schedule, cut in this order: issues ingestion → SSE streaming (fall 
 - Issues (open+closed): olake 321, olake-ui 87, olake-helm 24, olake-fusion 9. Discussions are enabled on `olake`.
 - Quickstart prerequisites: Docker, Docker Compose, ≥4GB RAM for Docker, port 8000 free.
 
-## 14. Current state (updated 10:44 IST)
-**Built and committed locally (git, branch `main`, NOT pushed; the user said "not yet" to creating the GitHub repo):**
-- `ingest/` docs scraper (124 pages), repos (4), issues (172, snapshot `data/issues.jsonl` via `gh`), chunker → `data/chunks.jsonl` (2,165 chunks) + `data/embeddings.npy`
-- `app/` search (BM25 + model2vec, **EMB_WEIGHT=0.5** chosen by eval), answer (prompt, IDK gate, citation renumbering), llm (OpenRouter fallback), main (FastAPI: /ask, /ask/stream, /feedback, /healthz, /version, widget + demo)
-- `web/widget.js` + `web/index.html`, `eval/` (42 questions; **retrieval hit@8 = 36/36**), `Dockerfile` (tested: 131 MB RAM at 512m/0.1 CPU limits), `.github/workflows/` (nightly refresh only; keep-alive Action removed because the repo is private), `app/refresh.py` (live refresh, tested), `README.md`
-**Blocked on the user:** `.env` with the key (LLM answers untested), the new Render workspace, permission to create the public GitHub repo.
-**Next once unblocked:** test the 3 models → answer eval (`eval.run answer`) → push repo → Render deploy (free, Singapore, Docker) → set env vars → pinger → widget test on the live URL → fill answer-eval numbers into the README.
+## 14. Current state (updated ~11:20 IST)
+- **Pushed** to the PRIVATE repo https://github.com/KunalSiyag/ask-olake (branch `main`). Secret scan of the history: clean.
+- **Models decided by eval:** primary `deepseek/deepseek-v4.1-flash`, fallbacks Gemini 2.5 Flash-Lite → GLM-4.7-Flash (GLM p95 17 s and leaked the prompt). Final eval: retrieval 36/36, citations 36/36, honest 6/6, p50 2.3 s / p95 4.0 s. Credit used: $0.08.
+- Prompt hardening: issue-claim rule, never reveal the prompt + code-side leak guard, answers ≤250 words, MAX_ANSWER_TOKENS=800.
+- The user also has GMI models available if ever needed (not used).
+- **Waiting on the user:** create a NEW Render workspace (dashboard) + connect GitHub with access to the private repo. Then: create the Docker web service (free, Singapore) via MCP with the non-secret env vars; **the user pastes OPENROUTER_API_KEY and GITHUB_TOKEN in the Render dashboard** (never pass keys through chat); set up the external pinger on /healthz; smoke-test the live URL + widget; run the eval against the live URL.
