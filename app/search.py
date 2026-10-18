@@ -61,6 +61,13 @@ def tokenize(text: str) -> list[str]:
 
 
 DEFINITION_Q = re.compile(r"^\s*(what\s+(is|are|'s)|what's|whats|explain|tell me about|define|describe|overview of)\b", re.I)
+# User phrasing -> the docs' vocabulary (query side only; measured on all eval sets)
+QUERY_SYNONYMS = {
+    "write": ("destination", "destinations", "writer"), "writes": ("destination", "destinations", "writer"),
+    "written": ("destination", "writer"), "writing": ("destination", "writer"),
+    "self-hosted": ("generic",), "on-prem": ("generic",), "on-premise": ("generic",), "on-premises": ("generic",),
+    "locally": ("quickstart", "local"), "laptop": ("quickstart", "local"),
+}
 PRODUCT_WORDS = {"olake", "fusion", "go", "ui", "olake-ui", "olake-go", "olake-fusion", "datazip", "platform", "tool", "product"}
 INTRO_URL = re.compile(r"(olake\.io/docs/$|/overview/|/introduction/|/getting-started/overview|/core/architecture/|/use-cases/)")
 INTRO_HEADING = re.compile(r"\b(what is|what are|overview|introduction|welcome)\b", re.I)
@@ -138,6 +145,12 @@ class SearchIndex:
     def vectors_by_key(self) -> dict[str, np.ndarray]:
         return {text_key(c): v for c, v in zip(self.chunks, self.vectors)}
 
+    @staticmethod
+    def expand(tokens: list[str]) -> list[str]:
+        """Add the docs' own words for common user phrasings (never removes the user's words)."""
+        extra = [syn for tok in tokens for syn in QUERY_SYNONYMS.get(tok, ())]
+        return tokens + [t for t in extra if t not in tokens]
+
     def correct(self, tokens: list[str]) -> list[str]:
         """Replace query words that appear nowhere in the corpus (typos like "fushion")
         with the closest corpus word; known words are never touched."""
@@ -178,7 +191,7 @@ class SearchIndex:
         return out
 
     def _search(self, query: str, k: int, per_page: int, pool: int) -> list[Hit]:
-        q_tokens = self.correct(tokenize(query))
+        q_tokens = self.expand(self.correct(tokenize(query)))
         bm25 = self.bm25.get_scores(q_tokens) if q_tokens else np.zeros(len(self.chunks))
         rankings = [np.argsort(-bm25)[:pool]]
 
