@@ -258,8 +258,10 @@ If behind schedule, cut in this order: issues ingestion → SSE streaming (fall 
 - Issues (open+closed): olake 321, olake-ui 87, olake-helm 24, olake-fusion 9. Discussions are enabled on `olake`.
 - Quickstart prerequisites: Docker, Docker Compose, ≥4GB RAM for Docker, port 8000 free.
 
-## 14. Current state of the folder
-- `CONTEXT.md` (this brief) · `CLAUDE.md` (auto-loads this file) · `.env.example` · `.gitignore` (`.env`, `.venv`, `__pycache__`, `data/raw/`)
-- `olake/`: empty folder made by the user. **Ask whether code goes here or in the repo root.**
-- `.claude/settings.json`: the user's Claude Code settings.
-- Not done yet: git repo, Render workspace, `.env` with the key.
+## 14. Current state (updated 10:44 IST)
+**Built and committed locally (git, branch `main`, NOT pushed; the user said "not yet" to creating the GitHub repo):**
+- `ingest/` docs scraper (124 pages), repos (4), issues (172, snapshot `data/issues.jsonl` via `gh`), chunker → `data/chunks.jsonl` (2,165 chunks) + `data/embeddings.npy`
+- `app/` search (BM25 + model2vec, **EMB_WEIGHT=0.5** chosen by eval), answer (prompt, IDK gate, citation renumbering), llm (OpenRouter fallback), main (FastAPI: /ask, /ask/stream, /feedback, /healthz, /version, widget + demo)
+- `web/widget.js` + `web/index.html`, `eval/` (42 questions; **retrieval hit@8 = 36/36**), `Dockerfile` (tested: 131 MB RAM at 512m/0.1 CPU limits), `.github/workflows/` (nightly refresh, keep-alive), `README.md`
+**Blocked on the user:** `.env` with the key (LLM answers untested), the new Render workspace, permission to create the public GitHub repo.
+**Next once unblocked:** test the 3 models → answer eval (`eval.run answer`) → push repo → Render deploy (free, Singapore, Docker) → set env vars → pinger → widget test on the live URL → fill answer-eval numbers into the README.
