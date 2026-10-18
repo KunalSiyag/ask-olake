@@ -5,15 +5,15 @@ It answers only from the official docs, the OLake GitHub repos and resolved GitH
 
 - **API:** `POST /ask` with `{"question": "..."}` → `{"answer": "...", "sources": ["<url>", ...]}`
 - **Widget:** one `<script>` tag, embeddable in any docs site
-- **Demo:** the `/` page of the deployment
+- **Live demo:** https://ask-olake-nh7j.onrender.com (the widget is embedded on that page)
 
 ```bash
-curl -X POST https://<app>/ask -H 'Content-Type: application/json' \
+curl -X POST https://ask-olake-nh7j.onrender.com/ask -H 'Content-Type: application/json' \
   -d '{"question": "How do I set up CDC for Postgres on RDS?"}'
 ```
 
 ```html
-<script src="https://<app>/widget.js" defer></script>
+<script src="https://ask-olake-nh7j.onrender.com/widget.js" defer></script>
 ```
 
 ---
@@ -122,7 +122,7 @@ So DeepSeek is primary, with OpenRouter's `models` fallback chain to Gemini, the
 ## Embedding the widget
 
 ```html
-<script src="https://<app>/widget.js" data-theme="auto" data-position="right" defer></script>
+<script src="https://ask-olake-nh7j.onrender.com/widget.js" data-theme="auto" data-position="right" defer></script>
 ```
 Shadow DOM isolation (it can't break the host CSS, and vice versa), streaming answers, citation chips with section deep links, copy buttons on code blocks, 👍/👎 feedback, dark mode, mobile layout, keyboard support (Enter, Esc). JS API: `AskOLake.open()`, `AskOLake.ask("question")`.
 
