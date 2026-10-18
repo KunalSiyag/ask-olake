@@ -1,0 +1,51 @@
+# Local fallback for Ask OLake: the same image as the Render deploy, run with Docker Compose.
+#
+#   docker compose up -d --build              # API + widget demo on http://localhost:8100
+#   docker compose run --rm eval-retrieval    # free retrieval eval inside the container
+#   docker compose run --rm eval              # answer eval against the container (costs LLM credit)
+#   docker compose down
+#
+# Secrets come from .env (same keys as Render; see .env.example). Host port: ASK_OLAKE_PORT (default 8100,
+# so it doesn't clash with a dev server on 8000).
+name: ask-olake
+
+x-common: &common
+  build: .
+  image: ask-olake:local
+  env_file:
+    - path: .env
+      required: false
+
+services:
+  app:
+    <<: *common
+    ports:
+      - "${ASK_OLAKE_PORT:-8100}:8000"
+    # Matches the Render free instance, so memory problems show up locally first
+    mem_limit: 512m
+    restart: unless-stopped
+    healthcheck:
+      # python:3.12-slim has no curl
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  eval-retrieval:
+    <<: *common
+    profiles: ["eval"]
+    # Mounted so edits to the question set apply without a rebuild
+    volumes:
+      - ./eval:/app/eval:ro
+    command: ["python", "-m", "eval.run", "retrieval"]
+
+  eval:
+    <<: *common
+    profiles: ["eval"]
+    volumes:
+      - ./eval:/app/eval:ro
+    command: ["python", "-m", "eval.run", "answer", "http://app:8000"]
+    depends_on:
+      app:
+        condition: service_healthy

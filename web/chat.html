@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ask OLake · Chat</title>
+<meta name="description" content="Ask questions about OLake and OLake Fusion. Answers come only from the official docs, with sources.">
+<style>
+  :root {
+    --bg: #fbfbfa; --surface: #ffffff; --fg: #18181b; --muted: #71717a; --faint: #a1a1aa;
+    --border: #e7e7e4; --border-strong: #d6d6d1; --soft: #f4f4f2;
+    --accent: #2f5bea; --accent-soft: rgba(47, 91, 234, .08); --accent-fg: #fff;
+    --code-bg: #f4f4f2; --ok: #16a34a; --warn: #d97706; --err: #dc2626;
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --radius: 12px;
+    --mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e0e10; --surface: #151517; --fg: #ececee; --muted: #9a9aa3; --faint: #6b6b73;
+      --border: #26262a; --border-strong: #34343a; --soft: #1b1b1e;
+      --accent: #6d8cff; --accent-soft: rgba(109, 140, 255, .12); --accent-fg: #0e0e10;
+      --code-bg: #1b1b1e; color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 15px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+    display: flex; flex-direction: column;
+  }
+  a { color: var(--accent); text-underline-offset: 2px; }
+  button { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+
+  /* ---------- top bar ---------- */
+  .bar {
+    position: sticky; top: 0; z-index: 5; height: 56px; flex: none;
+    display: flex; align-items: center; gap: 12px; padding: 0 20px;
+    background: color-mix(in srgb, var(--bg) 85%, transparent);
+    backdrop-filter: saturate(180%) blur(12px); -webkit-backdrop-filter: saturate(180%) blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; letter-spacing: -.01em; }
+  .brand svg { color: var(--accent); }
+  .brand small { color: var(--muted); font-weight: 450; }
+  .spacer { flex: 1; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 10px;
+    border: 1px solid var(--border); border-radius: 999px; color: var(--muted); font-size: 12.5px;
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); transition: background-color 200ms ease; }
+  .pill[data-state="ok"] .dot { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 18%, transparent); }
+  .pill[data-state="down"] .dot { background: var(--err); }
+  .bar a.link { color: var(--muted); text-decoration: none; font-size: 13.5px; padding: 6px 8px; border-radius: 8px; transition: color 150ms ease, background-color 150ms ease; }
+  @media (hover: hover) and (pointer: fine) { .bar a.link:hover { color: var(--fg); background: var(--soft); } }
+
+  /* ---------- thread ---------- */
+  .scroll { flex: 1; overflow-y: auto; scroll-padding-bottom: 24px; }
+  .thread { max-width: 760px; margin: 0 auto; padding: 28px 20px 40px; display: flex; flex-direction: column; gap: 28px; }
+
+  .empty { padding-top: min(12vh, 96px); }
+  .empty h1 { font-size: clamp(26px, 4vw, 32px); line-height: 1.2; letter-spacing: -.025em; margin: 0 0 10px; font-weight: 650; }
+  .empty p { color: var(--muted); margin: 0 0 28px; max-width: 560px; }
+  .suggest { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .suggest button {
+    text-align: left; cursor: pointer; padding: 14px 16px; min-height: 76px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    display: flex; flex-direction: column; gap: 4px;
+    transition: transform 140ms var(--ease-out), border-color 150ms ease, background-color 150ms ease;
+    animation: rise 320ms var(--ease-out) both;
+  }
+  .suggest button:nth-child(2) { animation-delay: 40ms; }
+  .suggest button:nth-child(3) { animation-delay: 80ms; }
+  .suggest button:nth-child(4) { animation-delay: 120ms; }
+  .suggest button span { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; font-weight: 550; }
+  .suggest button:active { transform: scale(0.97); }
+  @media (hover: hover) and (pointer: fine) { .suggest button:hover { border-color: var(--border-strong); background: var(--soft); } }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+
+  .turn-q { align-self: flex-end; max-width: 85%; background: var(--soft); border: 1px solid var(--border);
+    padding: 10px 14px; border-radius: 16px 16px 4px 16px; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+  .turn-a { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 14px; align-items: start; }
+  .avatar { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center;
+    background: var(--accent-soft); color: var(--accent); margin-top: 1px; }
+  .answer { min-width: 0; }
+  .body { opacity: 1; transform: none; transition: opacity 220ms var(--ease-out), transform 220ms var(--ease-out), filter 220ms var(--ease-out); }
+  @starting-style { .body { opacity: 0; transform: translateY(4px); filter: blur(2px); } }
+
+  .thinking { color: var(--muted); display: flex; align-items: center; gap: 10px; height: 28px; }
+  .shimmer {
+    background: linear-gradient(90deg, var(--muted) 0%, var(--muted) 40%, var(--fg) 50%, var(--muted) 60%, var(--muted) 100%);
+    background-size: 220% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+    animation: shimmer 1.4s linear infinite;
+  }
+  @keyframes shimmer { from { background-position: 100% 0; } to { background-position: -120% 0; } }
+  .elapsed { font-family: var(--mono); font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; }
+
+  /* rendered markdown */
+  .md > :first-child { margin-top: 0; } .md > :last-child { margin-bottom: 0; }
+  .md p { margin: 0 0 12px; }
+  .md ul, .md ol { margin: 0 0 12px; padding-left: 22px; } .md li { margin: 3px 0; }
+  .md strong { font-weight: 620; }
+  .md h4 { font-size: 15px; margin: 18px 0 6px; }
+  .md :not(pre) > code { font-family: var(--mono); font-size: .86em; background: var(--code-bg); border: 1px solid var(--border); padding: 1px 5px; border-radius: 5px; }
+  .md pre { position: relative; margin: 6px 0 14px; background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px; }
+  .md pre code { display: block; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.55; tab-size: 2; }
+  .cite { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; margin: 0 1px;
+    font-size: 11px; font-weight: 600; line-height: 1; text-decoration: none; vertical-align: 2px; font-variant-numeric: tabular-nums;
+    color: var(--accent); background: var(--accent-soft); border-radius: 5px; transition: background-color 150ms ease; }
+  @media (hover: hover) and (pointer: fine) { .cite:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); } }
+
+  .icon-btn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; cursor: pointer;
+    background: transparent; border: 1px solid transparent; border-radius: 7px; color: var(--muted); font-size: 12.5px;
+    transition: transform 140ms var(--ease-out), color 150ms ease, background-color 150ms ease; }
+  .icon-btn:active { transform: scale(0.97); }
+  @media (hover: hover) and (pointer: fine) { .icon-btn:hover { color: var(--fg); background: var(--soft); } }
+  .md pre .icon-btn { position: absolute; top: 6px; right: 6px; background: var(--surface); border-color: var(--border); }
+
+  /* sources */
+  .sources { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 12px; }
+  .sources h3 { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .sources ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  .sources a { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 10px;
+    padding: 6px 8px; margin: 0 -8px; border-radius: 8px; color: var(--fg); text-decoration: none; transition: background-color 150ms ease; }
+  @media (hover: hover) and (pointer: fine) { .sources a:hover { background: var(--soft); } }
+  .sources .n { font-size: 11px; font-weight: 600; color: var(--accent); background: var(--accent-soft); border-radius: 5px; height: 20px; display: grid; place-items: center; font-variant-numeric: tabular-nums; }
+  .sources .path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; }
+  .sources .path b { font-weight: 450; color: var(--muted); }
+  .tag { font-size: 11px; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
+  .note { margin-top: 14px; font-size: 13px; color: var(--muted); display: flex; gap: 8px; align-items: center; }
+
+  .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-top: 10px; margin-left: -8px; }
+  .meta .stat { font-family: var(--mono); font-size: 12px; color: var(--faint); padding: 0 8px; font-variant-numeric: tabular-nums; }
+  details.raw { margin-top: 8px; }
+  details.raw summary { list-style: none; }
+  details.raw summary::-webkit-details-marker { display: none; }
+  details.raw pre { margin: 6px 0 0; padding: 12px 14px; background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px;
+    font-family: var(--mono); font-size: 12px; line-height: 1.55; overflow-x: auto; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .error { color: var(--err); }
+
+  /* ---------- composer ---------- */
+  .dock { flex: none; padding: 0 20px calc(16px + env(safe-area-inset-bottom)); background: linear-gradient(to bottom, transparent, var(--bg) 30%); }
+  .composer { max-width: 760px; margin: 0 auto; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 16px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 24px -12px rgba(0,0,0,.12); transition: border-color 150ms ease, box-shadow 150ms ease; }
+  .composer:focus-within { border-color: color-mix(in srgb, var(--accent) 55%, var(--border-strong)); box-shadow: 0 0 0 4px var(--accent-soft), 0 8px 24px -12px rgba(0,0,0,.12); }
+  .composer form { display: flex; align-items: flex-end; gap: 8px; padding: 8px 8px 8px 16px; }
+  textarea { flex: 1; resize: none; border: 0; outline: 0; background: transparent; color: var(--fg); font: inherit;
+    padding: 8px 0; max-height: 180px; min-height: 24px; line-height: 1.5; }
+  textarea::placeholder { color: var(--faint); }
+  .send { flex: none; width: 36px; height: 36px; border-radius: 10px; border: 0; cursor: pointer; display: grid; place-items: center;
+    background: var(--fg); color: var(--bg); transition: transform 140ms var(--ease-out), opacity 150ms ease; }
+  .send:active { transform: scale(0.94); }
+  .send:disabled { opacity: .25; cursor: default; transform: none; }
+  .hint { max-width: 760px; margin: 8px auto 0; display: flex; justify-content: space-between; gap: 12px; color: var(--faint); font-size: 12px; }
+  .hint kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; color: var(--muted); }
+  .count { font-variant-numeric: tabular-nums; } .count.over { color: var(--err); }
+
+  @media (max-width: 640px) {
+    .bar { padding: 0 14px; } .bar .brand small, .bar a.link.hide-sm { display: none; }
+    .thread { padding: 20px 14px 32px; } .dock { padding: 0 12px calc(12px + env(safe-area-inset-bottom)); }
+    .suggest { grid-template-columns: 1fr; } .suggest button { min-height: 0; }
+    .turn-a { grid-template-columns: minmax(0, 1fr); } .avatar { display: none; }
+    .hint .keys { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .suggest button { animation: fade 200ms ease both; }
+    @keyframes fade { from { opacity: 0; } }
+    .body { transition: opacity 200ms ease; }
+    @starting-style { .body { opacity: 0; transform: none; filter: none; } }
+    .shimmer { animation: none; color: var(--muted); background: none; }
+    .suggest button:active, .icon-btn:active, .send:active { transform: none; }
+  }
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="brand">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M2 8c2.5-2 4.5-2 7 0s4.5 2 7 0 4.5-2 6 0"/><path d="M2 13c2.5-2 4.5-2 7 0s4.5 2 7 0 4.5-2 6 0"/><path d="M2 18c2.5-2 4.5-2 7 0s4.5 2 7 0 4.5-2 6 0"/></svg>
+    Ask OLake <small>docs assistant</small>
+  </div>
+  <div class="spacer"></div>
+  <span class="pill" id="status" data-state="idle" title="API status"><span class="dot"></span><span id="status-text">Connecting…</span></span>
+  <a class="link hide-sm" href="https://olake.io/docs/" target="_blank" rel="noopener">Docs ↗</a>
+  <button class="icon-btn" id="new-chat" type="button" title="Start over" aria-label="Start a new chat">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New
+  </button>
+</header>
+
+<main class="scroll" id="scroll">
+  <div class="thread" id="thread" aria-live="polite">
+    <section class="empty" id="empty">
+      <h1>Ask anything about OLake</h1>
+      <p>Setup, source connectors, sync modes, catalogs, OLake Fusion table maintenance and troubleshooting. Every answer comes from the official docs and repos, with sources. If the docs don't cover it, it says so.</p>
+      <div class="suggest" id="suggest">
+        <button type="button"><span>Connectors</span>How do I set up CDC for Postgres?</button>
+        <button type="button"><span>Catalogs</span>How do I configure AWS Glue as the Iceberg catalog?</button>
+        <button type="button"><span>Deployment</span>How do I deploy OLake on Kubernetes with Helm?</button>
+        <button type="button"><span>OLake Fusion</span>What does OLake Fusion compaction do?</button>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer class="dock">
+  <div class="composer">
+    <form id="form">
+      <textarea id="input" rows="1" placeholder="Ask about OLake or OLake Fusion…" aria-label="Your question" autocomplete="off"></textarea>
+      <button class="send" id="send" type="submit" aria-label="Send question" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+      </button>
+    </form>
+  </div>
+  <div class="hint">
+    <span class="keys"><kbd>Enter</kbd> to send · <kbd>Shift</kbd>+<kbd>Enter</kbd> for a new line · each question is answered on its own</span>
+    <span class="count" id="count"></span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+  var params = new URLSearchParams(location.search);
+  var API = (params.get("api") || (location.protocol === "file:" ? "http://localhost:8000" : location.origin)).replace(/\/$/, "");
+  var MAX_CHARS = 1000;
+  var reduceMotion = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  var $ = function (id) { return document.getElementById(id); };
+  var thread = $("thread"), scroller = $("scroll"), form = $("form"), input = $("input"), send = $("send"), count = $("count");
+  var emptyHTML = $("empty").outerHTML;
+  var busy = false;
+
+  // ---------- status pill: /healthz + /version ----------
+  function setStatus(state, text) { $("status").dataset.state = state; $("status-text").textContent = text; }
+  Promise.all([
+    fetch(API + "/healthz").then(function (r) { if (!r.ok) throw 0; return r.json(); }),
+    fetch(API + "/version").then(function (r) { return r.ok ? r.json() : {}; }).catch(function () { return {}; }),
+  ]).then(function (res) {
+    var h = res[0], v = res[1];
+    var model = (v.model || "").split("/").pop();
+    setStatus("ok", (h.chunks ? h.chunks.toLocaleString() + " chunks" : "Online") + (model ? " · " + model : ""));
+    if (v.built_at) $("status").title = "Index built " + v.built_at;
+  }).catch(function () { setStatus("down", "API offline"); });
+
+  // ---------- tiny XSS-safe markdown ----------
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+  function inline(s, sources) {
+    s = esc(s);
+    s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
+    s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    s = s.replace(/(^|[\s(])(https?:\/\/[^\s<)]+[^\s<).,;:])/g, '$1<a href="$2" target="_blank" rel="noopener noreferrer">$2</a>');
+    s = s.replace(/\[(\d+)\]/g, function (m, n) {
+      var url = sources[+n - 1];
+      return url ? '<a class="cite" href="' + esc(url) + '" target="_blank" rel="noopener noreferrer" title="' + esc(url) + '">' + n + "</a>" : "";
+    });
+    return s;
+  }
+  function markdown(src, sources) {
+    var out = [], lines = String(src).split("\n"), i = 0, list = null, para = [];
+    function flushPara() { if (para.length) { out.push("<p>" + inline(para.join(" "), sources) + "</p>"); para = []; } }
+    function flushList() { if (list) { out.push("</" + list + ">"); list = null; } }
+    while (i < lines.length) {
+      var line = lines[i];
+      if (/^\s*```/.test(line)) {
+        flushPara(); flushList();
+        var code = []; i++;
+        while (i < lines.length && !/^\s*```/.test(lines[i])) code.push(lines[i++]);
+        i++;
+        out.push('<pre><button class="icon-btn copy-code" type="button">Copy</button><code>' + esc(code.join("\n")) + "</code></pre>");
+        continue;
+      }
+      var ul = line.match(/^\s*[-*]\s+(.*)/), ol = line.match(/^\s*\d+[.)]\s+(.*)/), h = line.match(/^#{1,6}\s+(.*)/);
+      if (ul || ol) {
+        flushPara();
+        var kind = ul ? "ul" : "ol";
+        if (list !== kind) { flushList(); out.push("<" + kind + ">"); list = kind; }
+        out.push("<li>" + inline((ul || ol)[1], sources) + "</li>");
+      } else if (h) { flushPara(); flushList(); out.push("<h4>" + inline(h[1], sources) + "</h4>"); }
+      else if (!line.trim()) { flushPara(); flushList(); }
+      else { flushList(); para.push(line.trim()); }
+      i++;
+    }
+    flushPara(); flushList();
+    return out.join("");
+  }
+
+  function describe(url) {
+    try {
+      var u = new URL(url), path = u.pathname.replace(/\/$/, "");
+      if (u.hostname === "github.com") {
+        var p = path.split("/").filter(Boolean);
+        if (p[2] === "issues") return { label: p[1] + " issue #" + p[3], tag: "GitHub issue" };
+        return { label: p[1] + " / " + p.slice(4).join("/"), tag: "GitHub repo" };
+      }
+      if (u.hostname.endsWith("olake.io")) return { label: path.replace(/^\/docs/, "") || "/", host: "olake.io/docs", tag: "Docs" };
+      return { label: u.hostname + path, tag: "External" };
+    } catch (e) { return { label: url, tag: "" }; }
+  }
+
+  // ---------- DOM helpers ----------
+  function el(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
+  function scrollToEnd() { scroller.scrollTo({ top: scroller.scrollHeight, behavior: reduceMotion ? "auto" : "smooth" }); }
+  function copy(text, btn) {
+    if (!navigator.clipboard) return;
+    navigator.clipboard.writeText(text).then(function () {
+      var old = btn.innerHTML; btn.textContent = "Copied";
+      setTimeout(function () { btn.innerHTML = old; }, 1200);
+    }).catch(function () {});
+  }
+  var ICON_COPY = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
+  var ICON_CODE = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 6-6 6 6 6M16 6l6 6-6 6"/></svg>';
+  var AVATAR = '<div class="avatar" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M2 9c2.5-2 4.5-2 7 0s4.5 2 7 0 4.5-2 6 0"/><path d="M2 15c2.5-2 4.5-2 7 0s4.5 2 7 0 4.5-2 6 0"/></svg></div>';
+
+  function renderAnswer(answerEl, data, ms, status, question) {
+    var sources = Array.isArray(data.sources) ? data.sources : [];
+    var body = el("div", "body");
+    var md = el("div", "md", markdown(data.answer || "", sources));
+    body.appendChild(md);
+
+    if (sources.length) {
+      var box = el("div", "sources", "<h3>Sources</h3>");
+      var ol = el("ol");
+      sources.forEach(function (url, i) {
+        var d = describe(url), li = el("li"), a = el("a");
+        a.href = url; a.target = "_blank"; a.rel = "noopener noreferrer"; a.title = url;
+        a.innerHTML = '<span class="n">' + (i + 1) + '</span><span class="path">' + (d.host ? "<b>" + esc(d.host) + "</b>" : "") + esc(d.label) +
+          "</span>" + (d.tag ? '<span class="tag">' + esc(d.tag) + "</span>" : "");
+        li.appendChild(a); ol.appendChild(li);
+      });
+      box.appendChild(ol); body.appendChild(box);
+    } else if (status === 200) {
+      body.appendChild(el("div", "note", "No sources cited. The assistant found nothing in the docs to support an answer, so it didn't guess."));
+    }
+
+    var meta = el("div", "meta");
+    meta.appendChild(el("span", "stat", "POST /ask · " + status + " · " + (ms / 1000).toFixed(1) + "s"));
+    var copyBtn = el("button", "icon-btn", ICON_COPY + "Copy");
+    copyBtn.type = "button"; copyBtn.onclick = function () { copy(data.answer || "", copyBtn); };
+    meta.appendChild(copyBtn);
+    var raw = el("details", "raw");
+    var sum = el("summary", "icon-btn", ICON_CODE + "JSON");
+    raw.appendChild(sum);
+    raw.appendChild(el("pre", null, esc("POST " + API + "/ask\n" + JSON.stringify({ question: question }, null, 2) +
+      "\n\n← " + status + "\n" + JSON.stringify(data, null, 2))));
+    body.appendChild(meta); body.appendChild(raw);
+
+    body.querySelectorAll(".copy-code").forEach(function (btn) {
+      btn.onclick = function () { copy(btn.parentNode.querySelector("code").textContent, btn); };
+    });
+    answerEl.replaceChildren(body);
+  }
+
+  function renderError(answerEl, message) {
+    var body = el("div", "body");
+    body.appendChild(el("p", "error", esc(message)));
+    answerEl.replaceChildren(body);
+  }
+
+  // ---------- ask ----------
+  async function ask(question) {
+    question = question.trim();
+    if (!question || busy) return;
+    if (question.length > MAX_CHARS) return;
+    busy = true; updateComposer();
+    var empty = $("empty"); if (empty) empty.remove();
+
+    var q = el("div", "turn-q"); q.textContent = question; thread.appendChild(q);
+    var turn = el("div", "turn-a", AVATAR);
+    var answerEl = el("div", "answer");
+    answerEl.innerHTML = '<div class="thinking"><span class="shimmer">Searching the docs</span><span class="elapsed">0.0s</span></div>';
+    turn.appendChild(answerEl); thread.appendChild(turn);
+    input.value = ""; autosize(); updateComposer();
+    scrollToEnd();
+
+    var started = performance.now();
+    var tick = setInterval(function () {
+      var e = answerEl.querySelector(".elapsed");
+      if (e) e.textContent = ((performance.now() - started) / 1000).toFixed(1) + "s";
+      var s = answerEl.querySelector(".shimmer");
+      if (s && performance.now() - started > 1500) s.textContent = "Writing a grounded answer";
+    }, 100);
+
+    try {
+      var ctrl = new AbortController(), timer = setTimeout(function () { ctrl.abort(); }, 45000);
+      var resp = await fetch(API + "/ask", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: question }), signal: ctrl.signal,
+      });
+      clearTimeout(timer);
+      var data = await resp.json().catch(function () { return {}; });
+      var ms = performance.now() - started;
+      if (resp.ok || typeof data.answer === "string") renderAnswer(answerEl, data, ms, resp.status, question);
+      else if (resp.status === 429) renderError(answerEl, "Too many questions in a minute. Please wait a moment and try again.");
+      else renderError(answerEl, (typeof data.detail === "string" && data.detail) || "Something went wrong (HTTP " + resp.status + ").");
+    } catch (e) {
+      renderError(answerEl, e && e.name === "AbortError" ? "The assistant took too long to answer. Please try again."
+        : "Couldn't reach the API at " + API + ". Is the server running?");
+    } finally {
+      clearInterval(tick);
+      busy = false; updateComposer(); input.focus();
+      scrollToEnd();
+    }
+  }
+
+  // ---------- composer ----------
+  function autosize() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 180) + "px"; }
+  function updateComposer() {
+    var n = input.value.trim().length;
+    send.disabled = busy || n === 0 || n > MAX_CHARS;
+    count.textContent = n > MAX_CHARS * 0.8 ? n + " / " + MAX_CHARS : "";
+    count.classList.toggle("over", n > MAX_CHARS);
+  }
+  input.addEventListener("input", function () { autosize(); updateComposer(); });
+  input.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); ask(input.value); }
+  });
+  form.addEventListener("submit", function (e) { e.preventDefault(); ask(input.value); });
+
+  function bindSuggestions() {
+    var s = $("suggest");
+    if (!s) return;
+    s.querySelectorAll("button").forEach(function (b) {
+      b.onclick = function () { ask(b.lastChild.textContent); };
+    });
+  }
+  bindSuggestions();
+
+  $("new-chat").onclick = function () {
+    if (busy) return;
+    thread.innerHTML = emptyHTML; bindSuggestions(); input.value = ""; autosize(); updateComposer(); input.focus();
+  };
+
+  var preset = params.get("q");
+  if (preset) ask(preset); else input.focus();
+})();
+</script>
+</body>
+</html>
