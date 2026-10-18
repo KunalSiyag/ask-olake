@@ -247,10 +247,12 @@ async def healthz():
 async def version():
     """Exactly the organizers' contract: which commit and deployment are live, read from the
     platform's environment at call time (Render names first, Vercel names as fallback)."""
-    return {
-        "commit": os.getenv("RENDER_GIT_COMMIT") or os.getenv("VERCEL_GIT_COMMIT_SHA") or "",
-        "deployment": os.getenv("RENDER_INSTANCE_ID") or os.getenv("VERCEL_DEPLOYMENT_ID") or os.getenv("RENDER_SERVICE_ID") or "",
-    }
+    commit = os.getenv("RENDER_GIT_COMMIT") or os.getenv("VERCEL_GIT_COMMIT_SHA") or ""
+    # Render has no deploy-ID variable and RENDER_INSTANCE_ID changes on every instance restart,
+    # so identify the deployment by service + commit: it only changes when something is deployed.
+    service = os.getenv("RENDER_SERVICE_ID")
+    deployment = f"{service}@{commit[:12]}" if service and commit else os.getenv("VERCEL_DEPLOYMENT_ID") or ""
+    return {"commit": commit, "deployment": deployment}
 
 
 @app.get("/status")
