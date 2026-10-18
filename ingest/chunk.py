@@ -37,8 +37,27 @@ def _split_long(text: str) -> list[str]:
         elif _is_table(p):
             out.extend(_split_table(p))
         else:
-            out.extend(p[i:i + MAX_CHARS] for i in range(0, len(p), MAX_CHARS))
+            out.extend(_split_lines(p))
     return out
+
+
+def _split_lines(text: str) -> list[str]:
+    """Split at line boundaries; only a single line longer than the limit is hard-cut."""
+    pieces, cur = [], ""
+    for line in text.split("\n"):
+        while len(line) > MAX_CHARS:
+            if cur:
+                pieces.append(cur)
+                cur = ""
+            pieces.append(line[:MAX_CHARS])
+            line = line[MAX_CHARS:]
+        if cur and len(cur) + len(line) + 1 > MAX_CHARS:
+            pieces.append(cur)
+            cur = ""
+        cur = f"{cur}\n{line}" if cur else line
+    if cur:
+        pieces.append(cur)
+    return pieces
 
 
 def _is_table(text: str) -> bool:

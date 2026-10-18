@@ -1,0 +1,20 @@
+{"question": "What is strict CDC mode?", "expected": ["https://olake.io/docs/install/docker-cli/", "https://olake.io/docs/getting-started/job-level-properties/", "https://olake.io/docs/"]}
+{"question": "How fast is OLake compared to other tools?", "expected": ["https://olake.io/docs/benchmarks/ingestion/", "https://olake.io/docs/dmsvsolake/"]}
+{"question": "What is the latest OLake release?", "expected": ["https://olake.io/docs/release/ingestion/v0.12.0/", "https://olake.io/docs/release/ingestion/overview/"]}
+{"question": "How are Postgres data types mapped to Iceberg types?", "expected": ["https://olake.io/docs/connectors/postgres/"]}
+{"question": "Does OLake use Apache Arrow?", "expected": ["https://olake.io/docs/release/ingestion/v0.3.5/", "https://olake.io/docs/writers/iceberg/catalog/rest/", "https://olake.io/docs/writers/iceberg/catalog/glue/"]}
+{"question": "How do I run OLake syncs from Airflow?", "expected": ["https://olake.io/blog/olake-airflow/", "https://olake.io/blog/olake-airflow-on-ec2/"]}
+{"question": "What license is OLake under?", "expected": ["https://github.com/datazip-inc/olake/blob/master/LICENCE", "https://github.com/datazip-inc/olake-ui/blob/master/LICENSE", "https://github.com/datazip-inc/olake-fusion/blob/master/LICENSE", "https://github.com/datazip-inc/olake-helm/blob/master/LICENSE"]}
+{"question": "How does OLake compare to Debezium?", "expected": ["https://olake.io/blog/debezium-vs-olake/", "https://olake.io/blog/debezium-alternatives/", "https://olake.io/compare/best-data-replication-tools/"]}
+{"question": "How do I connect to Postgres through an SSH tunnel?", "expected": ["https://olake.io/docs/connectors/postgres/"]}
+{"question": "How do I enable CDC on SQL Server for OLake?", "expected": ["https://olake.io/docs/connectors/mssql/"]}
+{"question": "Does OLake support Amazon S3 Tables?", "expected": ["https://olake.io/docs/writers/iceberg/catalog/rest/"]}
+{"question": "How do I set the storage class in the Helm chart?", "expected": ["https://olake.io/docs/install/kubernetes/", "https://github.com/datazip-inc/olake-helm/blob/master/helm/olake/values.yaml", "https://github.com/datazip-inc/olake-helm/blob/master/helm/olake/README.md"]}
+{"question": "How do I upgrade OLake to a new version?", "expected": ["https://olake.io/docs/install/kubernetes/", "https://olake.io/docs/install/olake-ui/", "https://github.com/datazip-inc/olake-helm/blob/master/helm/olake/README.md"]}
+{"question": "Which sync modes does the DB2 connector support?", "expected": ["https://olake.io/docs/connectors/db2/"]}
+{"question": "Which file formats does the S3 source support?", "expected": ["https://olake.io/docs/connectors/s3/"]}
+{"question": "How are deletes written to Iceberg during CDC?", "expected": ["https://olake.io/docs/understanding/compatibility-engines/", "https://olake.io/docs/understanding/terminologies/olake/", "https://olake.io/blog/iceberg-delete-formats-cdc-equality-vs-positional-vs-deletion-vectors/"]}
+{"question": "How do I configure the JDBC catalog?", "expected": ["https://olake.io/docs/writers/iceberg/catalog/jdbc/"]}
+{"question": "Can OLake write to Azure ADLS or Google Cloud Storage?", "expected": ["https://olake.io/docs/writers/iceberg/azure/", "https://olake.io/docs/writers/iceberg/gcp/", "https://olake.io/docs/writers/parquet/gcs/"]}
+{"question": "What does the discover command generate?", "expected": ["https://olake.io/docs/install/docker-cli/", "https://olake.io/docs/community/commands-and-flags/", "https://olake.io/docs/core/configs/catalog/"]}
+{"question": "What does max_threads control?", "expected": ["https://olake.io/docs/connectors/postgres/", "https://olake.io/docs/getting-started/job-level-properties/", "https://olake.io/docs/community/commands-and-flags/", "https://olake.io/docs/connectors/mysql/", "https://olake.io/docs/connectors/kafka/"]}

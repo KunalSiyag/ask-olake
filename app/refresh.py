@@ -26,6 +26,7 @@ DATA = Path(os.getenv("DATA_DIR", "data"))
 INTERVAL_S = int(os.getenv("REFRESH_INTERVAL_S", "600"))
 DOCS_REPO = "olake-docs"
 MAX_DEPLOY_WAIT_CYCLES = 6  # ~1h for the website to pick up a docs commit
+WEBSITE_TYPES = {"docs", "blog"}  # both come from the olake.io scrape
 
 
 def _now() -> str:
@@ -76,7 +77,7 @@ class Refresher:
         resp = client.get(f"/repos/datazip-inc/{DOCS_REPO}/compare/{old}...{new}")
         if resp.status_code != 200:
             return True
-        return any(f["filename"].startswith("docs/") for f in resp.json().get("files", []))
+        return any(f["filename"].startswith(("docs/", "blog/", "compare/")) for f in resp.json().get("files", []))
 
     def _check_sync(self) -> list[str]:
         changes: list[str] = []
@@ -87,12 +88,12 @@ class Refresher:
             head = repos.remote_head(DOCS_REPO)
             if head and head != self.heads.get(DOCS_REPO):
                 if not self._docs_changed_in(client, self.heads.get(DOCS_REPO), head):
-                    self.heads[DOCS_REPO] = head  # blog/site-only commit
+                    self.heads[DOCS_REPO] = head  # commit touched no docs/blog/compare content
                 else:
-                    old_docs = [s for s in sections if s["source_type"] == "docs"]
+                    old_docs = [s for s in sections if s["source_type"] in WEBSITE_TYPES]
                     new_docs = docs.scrape(cache=False)
                     if new_docs and docs.content_hash(new_docs) != docs.content_hash(old_docs):
-                        sections = [s for s in sections if s["source_type"] != "docs"] + new_docs
+                        sections = [s for s in sections if s["source_type"] not in WEBSITE_TYPES] + new_docs
                         self.heads[DOCS_REPO] = head
                         self.status["pending_docs_cycles"] = 0
                         changes.append(f"docs ({len(new_docs)} sections)")

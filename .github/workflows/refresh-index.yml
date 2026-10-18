@@ -24,7 +24,7 @@ jobs:
       - name: Retrieval eval (fails the job if search quality regresses)
         run: |
           uv run python -m eval.run retrieval | tee eval.txt
-          grep -qE 'hit@8: (3[3-9]|[4-9][0-9])/' eval.txt
+          grep -qE 'hit@10: (3[3-9]|[4-9][0-9])/' eval.txt
       - name: Commit snapshot if changed
         run: |
           git config user.name "ask-olake-bot"

@@ -1,7 +1,7 @@
 # Ask OLake
 
 A docs assistant for **OLake** (database and Kafka → Apache Iceberg / Parquet ingestion) and **OLake Fusion** (Iceberg table maintenance).
-It answers only from the official docs, the OLake GitHub repos and resolved GitHub issues. **Every answer cites its sources, and it says so when it doesn't know.**
+It answers only from the official docs, the official blog and comparison pages, the OLake GitHub repos (READMEs, Helm values, connector config specs, licenses) and resolved GitHub issues. **Every answer cites its sources, and it says so when it doesn't know.**
 
 - **API:** `POST /ask` with `{"question": "..."}` → `{"answer": "...", "sources": ["<url>", ...]}`
 - **Widget:** one `<script>` tag, embeddable in any docs site
@@ -39,10 +39,10 @@ curl -X POST https://ask-olake-nh7j.onrender.com/ask -H 'Content-Type: applicati
 
 | Path | What it does |
 |---|---|
-| `ingest/docs.py` | Scrapes the **rendered** docs site from the sitemap; splits pages at h2/h3 with their anchors; keeps code blocks, tables, tabs and admonitions |
-| `ingest/repos.py` | Shallow-clones the 4 repos; READMEs, markdown docs, Helm `values.yaml` |
+| `ingest/docs.py` | Scrapes the **rendered** docs, blog and compare pages from the sitemap; splits pages at h2/h3 with their anchors; keeps code blocks, tables, tabs and admonitions; adds a "releases, newest first" summary |
+| `ingest/repos.py` | Shallow-clones the 4 repos; READMEs, markdown docs, Helm `values.yaml`, connector `spec.json` (flattened to one line per field: type, default, description), license facts |
 | `ingest/issues.py` | Closed GitHub issues with real discussion (contributor "assign me" chatter filtered out) |
-| `ingest/chunk.py` | Merges tiny sections, splits long ones at paragraph boundaries (never inside code fences) |
+| `ingest/chunk.py` | Merges tiny sections, splits long ones at paragraph, then line boundaries (never inside code fences); long tables are split by rows **with the header row repeated** |
 | `app/search.py` | BM25 + model2vec, weighted RRF, heuristic rerank |
 | `app/answer.py` | System prompt, "I don't know" gate, citation renumbering |
 | `app/llm.py` | OpenRouter client: model fallback, reasoning off, timeouts, retries |
@@ -57,7 +57,7 @@ curl -X POST https://ask-olake-nh7j.onrender.com/ask -H 'Content-Type: applicati
 
 **Scrape the rendered website, not the docs repo.** The docs are Docusaurus MDX. About 100 files are shared snippets inlined only at build time, so raw MDX misses text users actually see. The rendered pages contain everything plus stable `#anchor` ids.
 
-**Sources have a trust order:** docs > repo code/READMEs > GitHub issues. The reranker weights them, and the prompt tells the model to label repo and issue content. Docs win ties; issues help with troubleshooting.
+**Sources have a trust order:** docs (1.0) > repo code/READMEs (0.7) > GitHub issues (0.7) > blog/compare pages (0.5). Weights were tuned on the evals: indexing the whole blog at higher weight cost accuracy elsewhere. The reranker weights them, and the prompt tells the model to label repo and issue content. Docs win ties; issues help with troubleshooting.
 
 **Heading-aware chunks with breadcrumbs.** Each chunk is one docs section, titled e.g. `Sources / Postgres: Overview > Prerequisites > CDC Prerequisite`. Connector pages all share the h1 "Overview", so the breadcrumb makes titles specific, which helps both retrieval and citations.
 
@@ -135,7 +135,22 @@ uv run python -m eval.run retrieval                 # free: hit@8 of the expecte
 uv run python -m eval.run answer http://localhost:8000   # end-to-end: cited-source hit, honest IDK, latency
 ```
 
-**Results (shipped config):** retrieval hit@8 **36/36**, answer cited the expected page **36/36**, unanswerable / off-topic / prompt-injection handled honestly **6/6**, latency p50 **2.3 s** / p95 **4.0 s**.
+**Three eval sets** (retrieval measured as hit@10 and MRR; answers measured end to end against the live API):
+- `questions.jsonl`: 42 questions written alongside the system.
+- `hard_questions.jsonl`: 30 questions written **independently** from the live docs and GitHub issues, without seeing the code: exact config values, real error messages, multi-hop, casual phrasing, "No" traps, and 5 plausible-but-undocumented features (Cassandra, Kinesis, Terraform…).
+- `probe_questions.jsonl`: 20 probes for content that wasn't indexed or ranked well (Airflow, license, latest release, Debezium comparison, type mappings).
+
+| Set | Retrieval hit@10 | Answer cites expected page | Honest on unanswerable |
+|---|---|---|---|
+| Written with the system | 94% | 97–100% | 6/6 |
+| Independent hard set | 92% | 92–96% | 5/5 |
+| Probes | 95% (was 85%) | — | — |
+
+What the independent set caught: long tables split without their header row (the model then misread ✅/❌ columns), the discover-timeout default just outside the context window (top-8 → top-10), and "I couldn't find this" on questions whose correct answer is a documented "No" (e.g. "oracle cdc?"). The probes added: blog how-tos (Airflow), licenses, connector config specs (e.g. Postgres `max_threads` default 3), and a newest-first release summary.
+
+Known miss: "Kafka Upsert + Databricks (not Databricks Spark)?" needs two facts from two pages; it would need query decomposition, which we left out to keep one LLM call per question.
+
+**Original results (first config):** retrieval hit@8 **36/36**, answer cited the expected page **36/36**, unanswerable / off-topic / prompt-injection handled honestly **6/6**, latency p50 **2.3 s** / p95 **4.0 s**.
 
 What the eval caught and fixed along the way:
 - Equal-weight embeddings *hurt* retrieval (94% → 86%); weighting them 0.5 gave 100%.

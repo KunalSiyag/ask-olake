@@ -20,11 +20,19 @@ RAW_DIR = Path("data/raw/docs")
 SKIP_TAGS = {"script", "style", "svg", "button", "nav", "noscript", "img"}
 
 
-def docs_urls(client: httpx.Client) -> list[str]:
+# Official how-to blog posts and comparison pages: useful (Airflow, Debezium comparisons...)
+# but lower trust than the reference docs, so they are indexed as source_type "blog".
+BLOG_PREFIXES = ("https://olake.io/blog/", "https://olake.io/compare/")
+
+
+def sitemap_urls(client: httpx.Client) -> list[str]:
     xml = client.get(SITEMAP_URL).text
     ns = {"s": "http://www.sitemaps.org/schemas/sitemap/0.9"}
     locs = [e.text.strip() for e in ElementTree.fromstring(xml).findall(".//s:loc", ns)]
-    return sorted(u for u in locs if u.startswith("https://olake.io/docs/"))
+    wanted = ("https://olake.io/docs/", *BLOG_PREFIXES)
+    # skip blog listing/tag/author index pages; keep actual posts
+    return sorted(u for u in locs if u.startswith(wanted)
+                  and not re.search(r"/blog/(tags|authors|page|archive)(/|$)", u) and u not in BLOG_PREFIXES)
 
 
 def fetch(client: httpx.Client, url: str, cache: bool = True) -> str:
@@ -124,7 +132,7 @@ def _tidy(text: str) -> str:
 def parse_page(url: str, html: str) -> list[dict]:
     """Split one rendered docs page into sections at h2/h3 headings."""
     soup = BeautifulSoup(html, "lxml")
-    body = soup.select_one(".theme-doc-markdown")
+    body = soup.select_one(".theme-doc-markdown") or soup.select_one("article .markdown") or soup.select_one("main")
     if body is None:
         return []
     h1 = body.find("h1")
@@ -138,6 +146,8 @@ def parse_page(url: str, html: str) -> list[dict]:
     if h1_text and h1_text.lower() != (crumbs[-1].lower() if crumbs else ""):
         page_title = f"{page_title}: {h1_text}" if page_title else h1_text
     page_title = page_title or (soup.title.get_text(strip=True) if soup.title else url)
+    if url.startswith(BLOG_PREFIXES):
+        page_title = ("Blog: " if "/blog/" in url else "Compare: ") + page_title
 
     out: list[str] = []
     _render(body, out)
@@ -169,7 +179,7 @@ def parse_page(url: str, html: str) -> list[dict]:
 def scrape(cache: bool = True) -> list[dict]:
     sections = []
     with httpx.Client(headers={"User-Agent": USER_AGENT}, timeout=30, follow_redirects=True) as client:
-        urls = docs_urls(client)
+        urls = sitemap_urls(client)
         for i, url in enumerate(urls, 1):
             try:
                 page_sections = parse_page(url, fetch(client, url, cache))
@@ -177,10 +187,41 @@ def scrape(cache: bool = True) -> list[dict]:
                 print(f"  ! {url}: {e}")
                 continue
             for s in page_sections:
-                s["source_type"] = "docs"
-                s["product"] = "fusion" if "/docs/fusion/" in url else "olake"
+                s["source_type"] = "blog" if url.startswith(BLOG_PREFIXES) else "docs"
+                s["product"] = "fusion" if "/fusion/" in url else "olake"
             sections.extend(page_sections)
             if i % 20 == 0:
                 print(f"  {i}/{len(urls)} pages")
-    print(f"docs: {len(urls)} pages -> {len(sections)} sections")
+    summary = release_summary(sections)
+    if summary:
+        sections.append(summary)
+    print(f"docs+blog: {len(urls)} pages -> {len(sections)} sections")
     return sections
+
+
+def _version_key(text: str) -> tuple:
+    m = re.search(r"v(\d+)\.(\d+)\.(\d+)", text)
+    return tuple(int(x) for x in m.groups()) if m else (-1,)
+
+
+def release_summary(sections: list[dict]) -> dict | None:
+    """Release pages don't say which one is newest, so add one section that lists every
+    release newest first ("what is the latest version?" then has a direct answer)."""
+    out = []
+    for product, prefix in (("OLake Go (ingestion)", "/docs/release/ingestion/"), ("OLake Fusion", "/docs/fusion/release/maintenance/")):
+        pages = {}
+        for sec in sections:
+            url = sec["page_url"]
+            if prefix in url and not url.rstrip("/").endswith("overview"):
+                pages.setdefault(url, sec["page_title"].split(":")[0])
+        if not pages:
+            continue
+        ordered = sorted(pages.items(), key=lambda kv: _version_key(kv[1] + " " + kv[0]), reverse=True)
+        latest_url, latest_title = ordered[0]
+        out.append(f"**{product}**: the latest release is {latest_title.split('/')[-1].strip()} ({latest_url}).\n"
+                   "All releases, newest first:\n" + "\n".join(f"- {t.split('/')[-1].strip()}: {u}" for u, t in ordered))
+    if not out:
+        return None
+    return {"page_title": "Release notes: latest versions (newest first)", "heading": None,
+            "url": "https://olake.io/docs/release/ingestion/overview/", "page_url": "https://olake.io/docs/release/ingestion/overview/",
+            "text": "\n\n".join(out), "source_type": "docs", "product": "olake"}

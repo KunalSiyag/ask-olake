@@ -19,7 +19,7 @@ DATA = Path(os.getenv("DATA_DIR", "data"))
 DEFAULT_EMBEDDING_MODEL = "minishlab/potion-base-8M"  # set EMBEDDING_MODEL="" for BM25-only
 RRF_K = 60
 EMB_WEIGHT = float(os.getenv("EMB_WEIGHT", "0.5"))  # model2vec is weaker than BM25 on this corpus (see eval)
-SOURCE_WEIGHT = {"docs": 1.0, "repo": 0.8, "issue": 0.7}
+SOURCE_WEIGHT = {"docs": 1.0, "repo": float(os.getenv("REPO_WEIGHT", "0.7")), "blog": float(os.getenv("BLOG_WEIGHT", "0.5")), "issue": 0.7}
 FUSION_TERMS = {"fusion", "compaction", "compact", "optimizer", "optimizers", "maintenance", "amoro", "snapshot", "expire", "orphan"}
 STOPWORDS = set(
     "a an the is are was were be been do does did how what why when where which who can could should would "

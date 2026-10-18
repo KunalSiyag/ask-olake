@@ -1,5 +1,6 @@
 """Collect READMEs, markdown docs and Helm values from the OLake GitHub repos."""
 
+import json
 import re
 import shutil
 import subprocess
@@ -12,6 +13,30 @@ RAW_DIR = Path("data/raw/repos")
 SKIP_PARTS = {"node_modules", "vendor", ".git", "testdata", "test", "tests", "__tests__", "dist", "build"}
 SKIP_NAMES = {"CLAUDE.md", "AGENTS.md", "CHANGELOG.md", "CODE_OF_CONDUCT.md", "LICENSE.md", "SECURITY.md", "PULL_REQUEST_TEMPLATE.md"}
 YAML_NAMES = {"values.yaml", "Chart.yaml"}
+LICENSE_NAMES = {"LICENSE", "LICENCE", "LICENSE.md", "LICENCE.md"}
+LICENSE_KINDS = [(r"Apache License,?\s+Version 2\.0", "Apache License 2.0"), (r"MIT License", "MIT License"),
+                 (r"GNU AFFERO GENERAL PUBLIC LICENSE", "AGPL"), (r"GNU GENERAL PUBLIC LICENSE", "GPL")]
+
+
+def spec_to_text(spec: dict, prefix: str = "") -> list[str]:
+    """Flatten a connector's JSON Schema config spec into one readable line per field."""
+    lines, required = [], set(spec.get("required", []))
+    for name, prop in (spec.get("properties") or {}).items():
+        key = f"{prefix}{name}"
+        bits = [prop.get("type", "")]
+        if "default" in prop:
+            bits.append(f"default {json.dumps(prop['default'])}")
+        if "enum" in prop:
+            bits.append("one of " + ", ".join(map(str, prop["enum"])))
+        if name in required:
+            bits.append("required")
+        desc = " - ".join(x for x in (prop.get("title"), prop.get("description")) if x)
+        lines.append(f"- `{key}` ({', '.join(b for b in bits if b)}): {desc}".rstrip(": "))
+        lines.extend(spec_to_text(prop, f"{key}."))
+        for option in prop.get("oneOf", []) + prop.get("anyOf", []):
+            label = option.get("title", "option")
+            lines.extend(f"{line} [when {key} is {label}]" for line in spec_to_text(option, f"{key}."))
+    return lines
 
 
 def remote_head(repo: str) -> str | None:
@@ -82,14 +107,31 @@ def collect(only: list[str] | None = None, fresh: bool = False) -> list[dict]:
             if not path.is_file() or SKIP_PARTS & set(path.parts) or path.name in SKIP_NAMES:
                 continue
             is_md, is_yaml = path.suffix.lower() == ".md", path.name in YAML_NAMES
-            if not (is_md or is_yaml):
+            is_license = path.name in LICENSE_NAMES and path.parent == root
+            is_spec = path.name == "spec.json" and path.parent.name == "resources"
+            if not (is_md or is_yaml or is_license or is_spec):
                 continue
             text = path.read_text(errors="ignore")
             if len(text.strip()) < 80:
                 continue
             page_url = f"https://github.com/{ORG}/{repo}/blob/{branch}/{rel}"
             n_files += 1
-            if is_yaml:
+            if is_license:
+                kind = next((k for pat, k in LICENSE_KINDS if re.search(pat, text[:3000], re.I)), None)
+                if not kind:
+                    continue
+                parts = [(None, None, f"The {repo} repository (github.com/{ORG}/{repo}) is open source, licensed under the {kind}. See {rel} in the repository.")]
+                title = f"{repo}: License ({kind})"
+            elif is_spec:
+                try:
+                    lines = spec_to_text(json.loads(text))
+                except json.JSONDecodeError:
+                    continue
+                component = path.parent.parent.name
+                kind = "destination writer" if "destination" in path.parts else "source connector"
+                parts = [(None, None, f"Configuration fields of the {component} {kind} (from its spec.json; nested fields use dots):\n" + "\n".join(lines))]
+                title = f"{repo}: {component} {kind} config spec (spec.json)"
+            elif is_yaml:
                 parts = [(None, None, f"```yaml\n{text.strip()}\n```")]
                 title = f"{repo}: {rel}"
             else:
