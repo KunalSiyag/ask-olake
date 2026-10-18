@@ -28,6 +28,20 @@ STOPWORDS = set(
 )
 
 
+_SUFFIXES = ("ations", "ation", "ings", "ing", "ers", "ies", "ied", "ed", "es", "s")
+
+
+def _stem(tok: str) -> str:
+    """Very light suffix stripping, added as an extra token next to the original word."""
+    if not tok.isalpha() or len(tok) < 5:
+        return tok
+    for suf in _SUFFIXES:
+        if tok.endswith(suf) and len(tok) - len(suf) >= 4:
+            base = tok[: -len(suf)]
+            return base + "y" if suf in ("ies", "ied") else base
+    return tok
+
+
 def tokenize(text: str) -> list[str]:
     """Lowercase word tokens; identifiers like max_threads or jdbc_url_params are kept whole
     and also split into their parts so either form matches."""
@@ -36,6 +50,9 @@ def tokenize(text: str) -> list[str]:
         if tok in STOPWORDS:
             continue
         tokens.append(tok)
+        stem = _stem(tok)
+        if stem != tok:
+            tokens.append(stem)  # "partitioning"/"partitions" also match "partition"
         parts = re.split(r"[_.\-]", tok)
         if len(parts) > 1:
             tokens.extend(p for p in parts if p and p not in STOPWORDS)

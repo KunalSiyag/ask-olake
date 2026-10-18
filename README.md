@@ -142,9 +142,11 @@ uv run python -m eval.run answer http://localhost:8000   # end-to-end: cited-sou
 
 | Set | Retrieval hit@10 | Answer cites expected page | Honest on unanswerable |
 |---|---|---|---|
-| Written with the system | 94% | 97–100% | 6/6 |
+| Written with the system | 97% | 94–100% | 6/6 |
 | Independent hard set | 92% | 92–96% | 5/5 |
-| Probes | 95% (was 85%) | — | — |
+| Probes | 100% (was 85%) | 95% | — |
+
+Light stemming (indexed **next to** the original token, so exact identifiers still win) fixed "partition" vs "partitioning"-style misses: total retrieval hits across the three sets went 76 → 78 of 81.
 
 What the independent set caught: long tables split without their header row (the model then misread ✅/❌ columns), the discover-timeout default just outside the context window (top-8 → top-10), and "I couldn't find this" on questions whose correct answer is a documented "No" (e.g. "oracle cdc?"). The probes added: blog how-tos (Airflow), licenses, connector config specs (e.g. Postgres `max_threads` default 3), and a newest-first release summary.
 
