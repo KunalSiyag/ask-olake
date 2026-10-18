@@ -33,7 +33,7 @@ curl -X POST https://ask-olake-nh7j.onrender.com/ask -H 'Content-Type: applicati
             → model2vec cosine ┘→ weighted Reciprocal Rank Fusion
             → heuristic rerank (title match, source trust, Fusion hint, ≤2 chunks/page)
             → weak retrieval? → honest "I don't know" (no LLM call, $0)
-            → top 20 chunks → LLM (GLM-4.7-Flash → Gemini 2.5 Flash-Lite → DeepSeek V4.1 Flash; hedged after 6 s)
+            → top 20 chunks → LLM (DeepSeek V4.1 Flash → Gemini 2.5 Flash-Lite → GLM-4.7-Flash; hedged after 6 s)
             → [n] markers mapped in code to page URLs → {answer, sources}
 ```
 
@@ -88,7 +88,7 @@ curl -X POST https://ask-olake-nh7j.onrender.com/ask -H 'Content-Type: applicati
 | Gemini 2.5 Flash-Lite | 3 misses in the first 30 | (run incomplete) | ~1.2 s |
 | **DeepSeek V4.1 Flash (shipped)** | **100%** | **6/6** | **2.3 s / 4.0 s** |
 
-DeepSeek measured best, but **the organizers require the priority order GLM → Gemini → DeepSeek, so the shipped config follows it.** GLM's two weaknesses are covered in code: its slow tail by **hedged requests** (if GLM hasn't answered after 6 s, the same request goes to Gemini and the first answer wins; OpenRouter's own `models` fallback only covers errors, not slowness), and its prompt leak by the code-side leak guard. Reasoning is turned off for every model (verified: 0 reasoning tokens).
+The organizers suggested GLM first and confirmed teams may reorder the three allowed models, so **DeepSeek is primary, then Gemini, then GLM** (OpenRouter `models` fallback). On the organizer example questions with 20 chunks, DeepSeek-first scored **17/20** vs **13/20** for GLM-first, and its slowest answer was 4.3 s vs 6–8 s. **Hedged requests** cover slow outliers: if the primary hasn't answered after 6 s, the same request goes to Gemini and the first answer wins (OpenRouter's own fallback only covers errors, not slowness). The code-side prompt-leak guard stays on for every model. Reasoning is turned off for every model (verified: 0 reasoning tokens).
 
 **No vector DB, no LangChain.** 4,255 chunks fit in memory (the server uses ~210 MB; ~250 MB peak during a live refresh). Fewer moving parts, faster cold start, easier debugging.
 
@@ -119,7 +119,7 @@ DeepSeek measured best, but **the organizers require the priority order GLM → 
 - **Backstop:** a nightly GitHub Action rebuilds everything from scratch, runs the retrieval eval as a quality gate, and commits the snapshot the Docker image starts from → Render auto-deploys.
 - `/status` shows the indexed commit of every source, when the index was built, and the live-refresh status.
 - Retrieval takes ~0.2 s even on the 0.1-CPU free instance; the rest is one LLM call with reasoning off. Cached answers are instant.
-- **Cost:** ~8K input (20 chunks) + ≤800 output tokens per answer ≈ **$0.0007 per question** with GLM-4.7-Flash, so roughly 4,000 questions on the $3 credit. "I don't know" answers and cache hits cost $0. All development and evaluation today, across several agents and ~1,000 LLM calls, used about **$0.55** of the $3.
+- **Cost:** ~8K input (20 chunks) + ≤800 output tokens per answer ≈ **$0.0006 per question** with DeepSeek V4.1 Flash, so roughly 4,000 questions on the remaining credit. "I don't know" answers and cache hits cost $0. All development and evaluation today, across several agents and ~1,000 LLM calls, used about **$0.55** of the $3.
 
 ## Embedding the widget
 
@@ -154,7 +154,7 @@ What the independent set caught: long tables split without their header row (the
 
 Known miss: "Kafka Upsert + Databricks (not Databricks Spark)?" needs two facts from two pages; it would need query decomposition, which we left out to keep one LLM call per question.
 
-**Organizer example questions** (judge script: 20 questions, each with required facts checked by keyword): 15/20 → 16/20 on the live site after the fixes below (with DeepSeek first). With the **required GLM-first order** and 20 chunks: 13/20 by the strict keyword check (DeepSeek-first scored 17/20 on the same setup). Reading GLM's misses, several are wording-only ("most recent" vs "latest", omits "no Quartz"), so the real gap is smaller; we follow the organizers' stated order and added a completeness rule to the prompt (list every option the context gives, including stated limitations).
+**Organizer example questions** (judge script: 20 questions, each with required facts checked by keyword): 15/20 → 16/20 on the live site after the fixes below (with DeepSeek first). With 20 chunks: **DeepSeek-first 17/20** (the one remaining "miss", Delta Lake, is a correct "No." that the keyword pattern doesn't match) vs GLM-first 13/20, so DeepSeek ships first. A completeness rule in the prompt (list every option the context gives, including stated limitations) helps every model.
 - Vocabulary mismatch was the main failure ("write data to" vs the docs' "destinations", "self-hosted" vs "Generic setup guide", "install locally" vs "Quickstart"). A small **query-side synonym list** (adds the docs' words, never removes the user's) fixed "Where can OLake write data to?".
 - Several answers sat at ranks 11–20 (e.g. the Postgres `wal_level`/slot/publication steps), so the context went from **10 to 20 chunks**.
 - "What is X?" boost limited to product-definition questions; it had buried "What is an incremental sync?" under intro pages.
