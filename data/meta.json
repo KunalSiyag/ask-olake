@@ -1,5 +1,5 @@
 {
-  "built_at": "2026-10-18T05:12:53+00:00",
+  "built_at": "2026-10-18T05:24:37+00:00",
   "chunks": 2165,
   "pages": 394,
   "by_source": {
@@ -7,5 +7,13 @@
     "repo": 689,
     "issue": 209
   },
-  "embedding_model": "minishlab/potion-base-8M"
+  "embedding_model": "minishlab/potion-base-8M",
+  "heads": {
+    "olake-docs": "d06007140994ecbd239a52a9c0acf81fab4ed530",
+    "olake": "d20c68ed98ced12293cd621ac04136a946ba4290",
+    "olake-ui": "56826cf172a4c10e80a2276d0a2095313ec5b667",
+    "olake-helm": "c63f10c48cd4dc2cbe3a130c6190ccedf0dafa83",
+    "olake-fusion": "15ca160b298bf038f78f6639ec7aae67e4d4e33a"
+  },
+  "issues_checked_at": null
 }

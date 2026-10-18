@@ -4,6 +4,7 @@ then a cheap heuristic rerank.
 CLI: uv run python -m app.search "how do I enable CDC for postgres?"
 """
 
+import hashlib
 import json
 import os
 import re
@@ -53,19 +54,53 @@ class Hit:
     cosine: float
 
 
+def text_key(chunk: dict) -> str:
+    return hashlib.sha1(embed_text(chunk).encode()).hexdigest()
+
+
+_models: dict = {}
+
+
+def load_model(name: str):
+    if name not in _models:
+        from model2vec import StaticModel
+        _models[name] = StaticModel.from_pretrained(name)
+    return _models[name]
+
+
+def embed_chunks(model, chunks: list[dict]) -> np.ndarray:
+    vecs = model.encode([embed_text(c) for c in chunks]).astype(np.float32)
+    return vecs / np.linalg.norm(vecs, axis=1, keepdims=True).clip(min=1e-9)
+
+
 class SearchIndex:
-    def __init__(self, data_dir: Path = DATA, embedding_model: str | None = None):
-        self.chunks = [json.loads(line) for line in open(data_dir / "chunks.jsonl")]
+    """Built from data/ on disk, or from in-memory chunks during a live refresh.
+    `previous` lets a rebuild reuse embeddings of unchanged chunks."""
+
+    def __init__(self, data_dir: Path = DATA, embedding_model: str | None = None,
+                 chunks: list[dict] | None = None, previous: "SearchIndex | None" = None):
+        from_disk = chunks is None
+        self.chunks = [json.loads(line) for line in open(data_dir / "chunks.jsonl")] if from_disk else chunks
         self.bm25 = BM25Okapi([tokenize(embed_text(c)) for c in self.chunks])
         self.title_tokens = [set(tokenize(c["title"])) for c in self.chunks]
 
         self.model, self.vectors = None, None
         model_name = os.getenv("EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL) if embedding_model is None else embedding_model
         emb_path = data_dir / "embeddings.npy"
-        if model_name and emb_path.exists():
-            from model2vec import StaticModel
-            self.model = StaticModel.from_pretrained(model_name)
+        if not model_name or (from_disk and not emb_path.exists()):
+            return
+        self.model = load_model(model_name)
+        if from_disk:
             self.vectors = np.load(emb_path).astype(np.float32)
+            return
+        known = previous.vectors_by_key() if previous is not None and previous.vectors is not None else {}
+        missing = [c for c in self.chunks if text_key(c) not in known]
+        if missing:
+            known.update(zip((text_key(c) for c in missing), embed_chunks(self.model, missing)))
+        self.vectors = np.stack([known[text_key(c)] for c in self.chunks]) if self.chunks else None
+
+    def vectors_by_key(self) -> dict[str, np.ndarray]:
+        return {text_key(c): v for c, v in zip(self.chunks, self.vectors)}
 
     def search(self, query: str, k: int = 8, per_page: int = 2, pool: int = 50) -> list[Hit]:
         q_tokens = tokenize(query)

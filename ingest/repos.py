@@ -1,6 +1,7 @@
 """Collect READMEs, markdown docs and Helm values from the OLake GitHub repos."""
 
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -13,9 +14,21 @@ SKIP_NAMES = {"CLAUDE.md", "AGENTS.md", "CHANGELOG.md", "CODE_OF_CONDUCT.md", "L
 YAML_NAMES = {"values.yaml", "Chart.yaml"}
 
 
-def clone(repo: str) -> tuple[Path, str]:
+def remote_head(repo: str) -> str | None:
+    """Current HEAD commit of a GitHub repo via `git ls-remote` (no API call, no rate limit)."""
+    try:
+        out = subprocess.run(["git", "ls-remote", f"https://github.com/{ORG}/{repo}.git", "HEAD"],
+                             capture_output=True, text=True, timeout=30, check=True).stdout
+        return out.split()[0] if out else None
+    except (subprocess.SubprocessError, IndexError):
+        return None
+
+
+def clone(repo: str, fresh: bool = False) -> tuple[Path, str]:
     """Shallow-clone (or reuse) a repo and return its path and default branch."""
     dest = RAW_DIR / repo
+    if fresh and dest.exists():
+        shutil.rmtree(dest)
     if not dest.exists():
         RAW_DIR.mkdir(parents=True, exist_ok=True)
         subprocess.run(["git", "clone", "--depth", "1", "-q", f"https://github.com/{ORG}/{repo}.git", str(dest)], check=True)
@@ -57,10 +70,12 @@ def _page_title(text: str, rel: str) -> str:
     return re.sub(r"[*`]", "", m.group(1)).strip() if m else rel
 
 
-def collect() -> list[dict]:
+def collect(only: list[str] | None = None, fresh: bool = False) -> list[dict]:
     sections = []
     for repo, product in REPOS.items():
-        root, branch = clone(repo)
+        if only is not None and repo not in only:
+            continue
+        root, branch = clone(repo, fresh)
         n_files = 0
         for path in sorted(root.rglob("*")):
             rel = path.relative_to(root).as_posix()
@@ -90,6 +105,7 @@ def collect() -> list[dict]:
                     "text": body,
                     "source_type": "repo",
                     "product": product,
+                    "repo": repo,
                 })
         print(f"repo {repo}: {n_files} files")
     print(f"repos: {len(sections)} sections")

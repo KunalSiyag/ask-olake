@@ -27,17 +27,22 @@ def docs_urls(client: httpx.Client) -> list[str]:
     return sorted(u for u in locs if u.startswith("https://olake.io/docs/"))
 
 
-def fetch(client: httpx.Client, url: str) -> str:
-    """Fetch a page, caching the raw HTML so re-runs don't hit the site again."""
-    RAW_DIR.mkdir(parents=True, exist_ok=True)
+def fetch(client: httpx.Client, url: str, cache: bool = True) -> str:
+    """Fetch a page; with cache=True the raw HTML is kept so re-runs don't hit the site again."""
     path = RAW_DIR / (hashlib.sha1(url.encode()).hexdigest()[:16] + ".html")
-    if path.exists():
+    if cache and path.exists():
         return path.read_text()
     resp = client.get(url)
     resp.raise_for_status()
-    path.write_text(resp.text)
+    if cache:
+        RAW_DIR.mkdir(parents=True, exist_ok=True)
+        path.write_text(resp.text)
     time.sleep(0.2)  # be polite
     return resp.text
+
+
+def content_hash(sections: list[dict]) -> str:
+    return hashlib.sha1("".join(s["text"] for s in sections).encode()).hexdigest()
 
 
 def _inline(node: Tag) -> str:
@@ -161,13 +166,13 @@ def parse_page(url: str, html: str) -> list[dict]:
     return sections
 
 
-def scrape() -> list[dict]:
+def scrape(cache: bool = True) -> list[dict]:
     sections = []
     with httpx.Client(headers={"User-Agent": USER_AGENT}, timeout=30, follow_redirects=True) as client:
         urls = docs_urls(client)
         for i, url in enumerate(urls, 1):
             try:
-                page_sections = parse_page(url, fetch(client, url))
+                page_sections = parse_page(url, fetch(client, url, cache))
             except httpx.HTTPError as e:
                 print(f"  ! {url}: {e}")
                 continue

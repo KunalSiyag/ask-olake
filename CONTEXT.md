@@ -180,7 +180,9 @@ Prepend the breadcrumb to the text before indexing (helps both BM25 and embeddin
 - **Render FREE plan only.** **First: the user creates a NEW dedicated Render workspace** (e.g. "ask-olake") in the dashboard (the MCP can't create workspaces) → select it with the Render MCP (`select_workspace`) → deploy only there. Check that free instances are allowed in that workspace.
 - The free plan **sleeps after ~15 min idle** and grading happens after freeze → **keep-alive pinger** (cron-job.org or UptimeRobot, free) on `/healthz` every ~10 min. 750 free hours/month covers one service.
 - Free instance ≈ 512 MB RAM, 0.1 CPU → **no local LLM**; only model2vec runs locally. **The index is built in the Docker build** → fast cold start. Region: **Singapore**.
-- **Freshness:** a nightly GitHub Action → Render deploy hook → the rebuild re-scrapes and re-indexes. `/version` shows the build time + docs commit.
+- **Freshness (decided 10:50): live refresh** in `app/refresh.py`. Every 10 min: `git ls-remote` on the 5 repos; on a docs change → compare API checks `docs/` → re-scrape (retry if the site hasn't redeployed); repo change → re-clone that repo; issues `since=` last check (GITHUB_TOKEN). Incremental re-embed + atomic index swap + cache clear. Plus `POST /admin/refresh` (bearer REFRESH_TOKEN or GitHub webhook HMAC with WEBHOOK_SECRET). A nightly Action (full rebuild + eval gate + commit snapshot → Render autodeploy) is the backstop.
+- **Repo is PRIVATE** (user decision). So: no keep-alive GitHub Action (it would burn ~4,300 of 2,000 free Action minutes per month); grant Render access to the private repo; judges need access (add collaborators or make it public at submission; check with the organizers).
+- **GITHUB_TOKEN:** a fine-grained PAT (public repos read-only) in `.env` and Render env; used for issues + compare API.
 - **Secrets:** `.env` locally (gitignored); the same keys in Render → Environment. Never upload `.env`.
 
 ```

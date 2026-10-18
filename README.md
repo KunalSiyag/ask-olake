@@ -46,7 +46,8 @@ curl -X POST https://<app>/ask -H 'Content-Type: application/json' \
 | `app/search.py` | BM25 + model2vec, weighted RRF, heuristic rerank |
 | `app/answer.py` | System prompt, "I don't know" gate, citation renumbering |
 | `app/llm.py` | OpenRouter client: model fallback, reasoning off, timeouts, retries |
-| `app/main.py` | FastAPI: `/ask`, `/ask/stream` (SSE), `/feedback`, `/healthz`, `/version`, widget + demo |
+| `app/main.py` | FastAPI: `/ask`, `/ask/stream` (SSE), `/feedback`, `/healthz`, `/version`, `/admin/refresh`, widget + demo |
+| `app/refresh.py` | Live refresh: change detection, partial re-fetch, incremental re-embed, atomic index swap |
 | `web/widget.js` | Dependency-free embeddable widget (Shadow DOM) |
 | `eval/` | 42-question eval set + runner |
 
@@ -85,7 +86,7 @@ curl -X POST https://<app>/ask -H 'Content-Type: application/json' \
 
 | Concern | How |
 |---|---|
-| Availability | Render free plan + keep-alive pinger (external + GitHub Action backup); the index is baked into the image, so startup is fast |
+| Availability | Render free plan + external keep-alive pinger; the index is baked into the image, so startup is fast; a live refresh never takes the old index offline |
 | Budget ($3 event credit) | Per-IP rate limit, a **global daily LLM-call cap**, an answer cache, $0 "I don't know" path, `max_tokens` 500, reasoning off |
 | LLM failures | OpenRouter model fallback chain, SDK retries with backoff on 429/5xx, timeout, graceful error still in the API contract shape |
 | Input safety | Length cap, JSON validation, prompt-injection rules; the widget HTML-escapes all model output |
@@ -95,7 +96,15 @@ curl -X POST https://<app>/ask -H 'Content-Type: application/json' \
 
 ## Freshness, latency, cost
 
-- **Freshness:** a nightly GitHub Action re-scrapes the docs, re-clones the repos, refreshes issues, rebuilds the index, runs the retrieval eval as a quality gate, and commits the snapshot → Render auto-deploys. `/version` shows when the index was built.
+- **Freshness: live, ~10 minutes behind the sources, no redeploy.** A background refresher (`app/refresh.py`) checks every 10 min:
+  - `git ls-remote` on `olake-docs` and the 4 code repos: instant and uses no API quota.
+  - **docs repo moved** → the GitHub compare API checks whether `docs/` changed (blog-only commits are skipped) → re-scrape olake.io. If the site hasn't redeployed yet (content identical), it retries next cycle.
+  - **code repo moved** → fresh shallow clone of only that repo.
+  - **issues** updated since the last check → re-fetch only those.
+  - Only changed chunks are re-embedded (embeddings are cached by content hash), the new index is **swapped in atomically**, and the answer cache is cleared so no stale answers are served. Measured: a repo change is picked up and swapped in ~10 s, re-indexing itself takes 0.3 s.
+- **Push-based option:** `POST /admin/refresh` accepts a **GitHub webhook** (HMAC-SHA256 `X-Hub-Signature-256`, `WEBHOOK_SECRET`) or a bearer `REFRESH_TOKEN`. If OLake adds a webhook on `olake-docs`, updates become instant.
+- **Backstop:** a nightly GitHub Action rebuilds everything from scratch, runs the retrieval eval as a quality gate, and commits the snapshot the Docker image starts from → Render auto-deploys.
+- `/version` shows the indexed commit of every source, when the index was built, and the live-refresh status.
 - **Latency:** retrieval takes ~0.2 s on the free instance; the rest is one LLM call with reasoning off. Cached answers are instant.
 - **Cost:** ~5K input + ≤500 output tokens per answer ≈ **$0.0004 per question** with GLM-4.7-Flash, so roughly 7,000 questions on $3. "I don't know" answers and cache hits cost $0.
 

@@ -6,6 +6,9 @@ POST /feedback    thumbs up/down from the widget
 GET  /healthz, /version
 """
 
+import asyncio
+import hashlib
+import hmac
 import json
 import logging
 import os
@@ -17,6 +20,8 @@ from collections import OrderedDict, defaultdict, deque
 from datetime import date
 from pathlib import Path
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
@@ -24,6 +29,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from app import answer, config, llm
+from app.refresh import Refresher
 from app.search import SearchIndex
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format="%(message)s")
@@ -38,7 +44,31 @@ WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 META = json.loads((Path(os.getenv("DATA_DIR", "data")) / "meta.json").read_text())
 index = SearchIndex()
 
-app = FastAPI(title="Ask OLake", version="1.0")
+
+def get_index() -> SearchIndex:
+    return index
+
+
+def swap_index(new_index: SearchIndex) -> None:
+    """Atomically replace the live index; cached answers may be stale, so drop them."""
+    global index
+    index = new_index
+    _cache.clear()
+    log_event("index_swapped", chunks=len(new_index.chunks))
+
+
+refresher = Refresher(get_index, swap_index, META)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    task = asyncio.create_task(refresher.run_forever()) if os.getenv("LIVE_REFRESH", "1") == "1" else None
+    yield
+    if task:
+        task.cancel()
+
+
+app = FastAPI(title="Ask OLake", version="1.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["*"])
 
 
@@ -210,7 +240,29 @@ async def healthz():
 @app.get("/version")
 async def version():
     return {**META, "model": config.LLM_MODEL, "fallback_models": config.LLM_FALLBACK_MODELS,
-            "embeddings": index.model is not None}
+            "embeddings": index.model is not None, "live_refresh": refresher.status}
+
+
+def refresh_authorized(request: Request, body: bytes) -> bool:
+    """Either a bearer token (manual / cron) or a GitHub webhook HMAC signature."""
+    token, secret = os.getenv("REFRESH_TOKEN", ""), os.getenv("WEBHOOK_SECRET", "")
+    auth = request.headers.get("authorization", "")
+    if token and hmac.compare_digest(auth, f"Bearer {token}"):
+        return True
+    signature = request.headers.get("x-hub-signature-256", "")
+    if secret and signature:
+        expected = "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+        return hmac.compare_digest(signature, expected)
+    return False
+
+
+@app.post("/admin/refresh", status_code=202)
+async def admin_refresh(request: Request):
+    if not refresh_authorized(request, await request.body()):
+        raise HTTPException(401, "Unauthorized")
+    asyncio.create_task(refresher.check())
+    log_event("refresh_triggered", via="webhook" if request.headers.get("x-github-event") else "token")
+    return {"accepted": True, "status": refresher.status}
 
 
 if WEB_DIR.exists():

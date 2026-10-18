@@ -1,29 +1,46 @@
 """Closed, discussed GitHub issues -> lower-trust troubleshooting sections.
 
-Fetching uses the `gh` CLI (authenticated, so no rate-limit trouble) and writes a snapshot
-to data/issues.jsonl. Builds without `gh` (e.g. the Docker build) reuse the snapshot.
+Uses the GitHub REST API with GITHUB_TOKEN (5,000 req/h; without a token GitHub allows
+only 60/h, so we fall back to the committed snapshot data/issues.jsonl).
 
-Refresh: uv run python -m ingest.issues
+Refresh the snapshot: uv run python -m ingest.issues
 """
 
 import json
+import os
 import re
-import shutil
-import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+import httpx
+
 ORG = "datazip-inc"
 REPOS = {"olake": "olake", "olake-ui": "olake", "olake-helm": "olake", "olake-fusion": "fusion"}
-SNAPSHOT = Path("data/issues.jsonl")
+SNAPSHOT = Path(os.getenv("DATA_DIR", "data")) / "issues.jsonl"
 CHATTER = re.compile(r"\b(assign|work on (this|it)|take (this|it) up|pick (this|it) up|interested in|can i (work|take))\b", re.I)
 MAX_BODY, MAX_COMMENT, MAX_TOTAL = 1500, 1200, 4000
 
 
-def _gh(path: str) -> list:
-    out = subprocess.run(["gh", "api", "--paginate", path], capture_output=True, text=True, check=True).stdout
-    # --paginate concatenates JSON arrays: "][" between pages
-    return json.loads("[" + out.strip()[1:-1].replace("]\n[", ",").replace("][", ",") + "]") if out.strip() else []
+def github_client() -> httpx.Client | None:
+    token = os.getenv("GITHUB_TOKEN", "").strip()
+    if not token:
+        return None
+    return httpx.Client(base_url="https://api.github.com", timeout=30, headers={
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "ask-olake",
+    })
+
+
+def _get_all(client: httpx.Client, path: str, params: dict | None = None) -> list:
+    items, url, params = [], path, {"per_page": 100, **(params or {})}
+    while url:
+        resp = client.get(url, params=params)
+        resp.raise_for_status()
+        items.extend(resp.json())
+        url, params = resp.links.get("next", {}).get("url"), None
+    return items
 
 
 def _clean(text: str | None, limit: int) -> str:
@@ -32,8 +49,8 @@ def _clean(text: str | None, limit: int) -> str:
     return text[:limit] + ("…" if len(text) > limit else "")
 
 
-def _issue_section(repo: str, product: str, issue: dict) -> dict | None:
-    comments = _gh(f"repos/{ORG}/{repo}/issues/{issue['number']}/comments?per_page=100")
+def _issue_section(client: httpx.Client, repo: str, product: str, issue: dict) -> dict | None:
+    comments = _get_all(client, f"/repos/{ORG}/{repo}/issues/{issue['number']}/comments")
     useful = [c for c in comments if c.get("user", {}).get("type") != "Bot"
               and len(c.get("body") or "") > 60 and not CHATTER.search((c.get("body") or "")[:200])]
     if not useful:
@@ -52,34 +69,47 @@ def _issue_section(repo: str, product: str, issue: dict) -> dict | None:
     }
 
 
-def fetch() -> list[dict]:
+def fetch(client: httpx.Client, since: str | None = None) -> list[dict]:
+    """Closed issues with useful discussion. With `since` (ISO time) only issues updated after it."""
     sections = []
     for repo, product in REPOS.items():
-        issues = [i for i in _gh(f"repos/{ORG}/{repo}/issues?state=closed&per_page=100")
+        params = {"state": "closed", **({"since": since} if since else {})}
+        issues = [i for i in _get_all(client, f"/repos/{ORG}/{repo}/issues", params)
                   if "pull_request" not in i and i.get("comments", 0) > 0]
         with ThreadPoolExecutor(max_workers=8) as pool:
-            found = [s for s in pool.map(lambda i: _issue_section(repo, product, i), issues) if s]
+            found = [s for s in pool.map(lambda i: _issue_section(client, repo, product, i), issues) if s]
         print(f"issues {repo}: {len(found)}/{len(issues)} kept")
         sections.extend(found)
-    with open(SNAPSHOT, "w") as f:
-        for s in sections:
-            f.write(json.dumps(s, ensure_ascii=False) + "\n")
     return sections
 
 
+def load_snapshot() -> list[dict]:
+    return [json.loads(line) for line in open(SNAPSHOT)] if SNAPSHOT.exists() else []
+
+
+def save_snapshot(sections: list[dict]) -> None:
+    with open(SNAPSHOT, "w") as f:
+        for s in sections:
+            f.write(json.dumps(s, ensure_ascii=False) + "\n")
+
+
 def collect() -> list[dict]:
-    if shutil.which("gh"):
+    client = github_client()
+    if client:
         try:
-            return fetch()
-        except subprocess.CalledProcessError as e:
-            print(f"issues: gh failed ({e.stderr.strip()[:200]}); using snapshot")
-    if SNAPSHOT.exists():
-        sections = [json.loads(line) for line in open(SNAPSHOT)]
-        print(f"issues: {len(sections)} from snapshot")
-        return sections
-    print("issues: no gh and no snapshot; skipping")
-    return []
+            with client:
+                sections = fetch(client)
+            save_snapshot(sections)
+            return sections
+        except httpx.HTTPError as e:
+            print(f"issues: GitHub API failed ({e}); using snapshot")
+    sections = load_snapshot()
+    print(f"issues: {len(sections)} from snapshot" if sections else "issues: no token and no snapshot; skipping")
+    return sections
 
 
 if __name__ == "__main__":
-    fetch()
+    from dotenv import load_dotenv
+
+    load_dotenv()
+    collect()
