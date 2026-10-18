@@ -60,7 +60,10 @@ def answer(base: str) -> None:
             t = time.perf_counter()
             r = client.post(f"{base}/ask", json={"question": q["question"]})
             lat.append(time.perf_counter() - t)
-            body = r.json()
+            body = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+            if "answer" not in body:
+                print(f"HTTP {r.status_code} for {q['question']!r}: {str(body)[:120]}")
+                body = {"answer": "", "sources": []}
             idk = says_idk(body["answer"])
             if q["expected"]:
                 total += 1

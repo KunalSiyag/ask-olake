@@ -18,5 +18,5 @@ MAX_QUESTION_CHARS = int(os.getenv("MAX_QUESTION_CHARS", "1000"))
 
 # Abuse / budget guards. The graders send the test set from one IP, so the per-IP
 # limit is generous; the global daily cap is what protects the $3 credit.
-RATE_LIMIT_PER_MIN = int(os.getenv("RATE_LIMIT_PER_MIN", "30"))
+RATE_LIMIT_PER_MIN = int(os.getenv("RATE_LIMIT_PER_MIN", "120"))
 DAILY_LLM_CALL_CAP = int(os.getenv("DAILY_LLM_CALL_CAP", "3000"))
