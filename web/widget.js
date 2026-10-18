@@ -68,7 +68,8 @@
   .send { background: var(--accent); color: var(--accent-fg); border: none; border-radius: 10px; padding: 0 14px; cursor: pointer; font: inherit; font-weight: 600; }
   .send:disabled { opacity: .5; cursor: default; }
   .foot { text-align: center; font-size: 11px; color: var(--muted); padding: 0 0 8px; }
-  @media (max-width: 480px) { .wrap { bottom: 12px; ${POSITION}: 12px; } .panel { width: calc(100vw - 24px); height: calc(100vh - 100px); } }
+  @media (max-width: 480px) { .wrap { bottom: 12px; left: 12px; right: 12px; } .panel { width: auto; height: calc(100dvh - 100px); }
+    .fab { margin-left: ${POSITION === "left" ? "0" : "auto"}; } }
   `;
 
   // ---------- tiny, XSS-safe markdown renderer ----------
@@ -205,8 +206,12 @@
       var a = document.createElement("a");
       a.className = "chip"; a.href = c.section_url || c.url; a.target = "_blank"; a.rel = "noopener noreferrer";
       a.title = c.title;
+      // "Destinations / … / 1. AWS Glue: AWS Glue Catalog Write Guide > Configuration (part 3)"
+      //   -> "AWS Glue Catalog Write Guide › Configuration"
+      var parts = c.title.replace(/ \(part \d+\)$/, "").split(" > ");
+      var page = parts[0].split(/: | \/ /).pop();
       var b = document.createElement("b"); b.textContent = c.n;
-      var t = document.createElement("span"); t.textContent = c.title.split(" > ").slice(-1)[0];
+      var t = document.createElement("span"); t.textContent = parts.length > 1 ? page + " › " + parts[parts.length - 1] : page;
       a.appendChild(b); a.appendChild(t); box.appendChild(a);
     });
     el.appendChild(box);

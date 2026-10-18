@@ -11,11 +11,11 @@
   body { margin: 0; font: 16px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--fg); }
   nav.top { height: 60px; display: flex; align-items: center; gap: 24px; padding: 0 24px; border-bottom: 1px solid var(--border); }
   nav.top b { font-size: 18px; } nav.top a { color: var(--muted); text-decoration: none; font-size: 15px; }
-  .layout { display: grid; grid-template-columns: 260px 1fr; min-height: calc(100vh - 60px); }
+  .layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); min-height: calc(100vh - 60px); }
   aside { background: var(--side); border-right: 1px solid var(--border); padding: 20px 16px; font-size: 14px; }
   aside p { margin: 14px 0 6px; font-weight: 600; } aside a { display: block; color: var(--muted); text-decoration: none; padding: 3px 8px; border-radius: 6px; }
   aside a.on { background: rgba(37,99,235,.1); color: var(--accent); }
-  main { padding: 40px 48px; max-width: 860px; }
+  main { padding: 40px 48px; max-width: 860px; min-width: 0; }
   h1 { font-size: 34px; margin: 0 0 8px; } h2 { margin-top: 36px; }
   code, pre { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 14px; }
   pre { background: var(--code); padding: 14px 16px; border-radius: 8px; overflow-x: auto; }
@@ -24,7 +24,7 @@
   .tries { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
   .tries button { border: 1px solid var(--border); background: var(--bg); color: var(--fg); padding: 6px 12px; border-radius: 999px; cursor: pointer; font: inherit; font-size: 14px; }
   .tries button:hover { border-color: var(--accent); }
-  @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } aside { display: none; } main { padding: 24px 16px; } }
+  @media (max-width: 800px) { .layout { grid-template-columns: minmax(0, 1fr); } aside { display: none; } main { padding: 24px 16px; } }
 </style>
 </head>
 <body>
