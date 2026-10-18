@@ -23,7 +23,7 @@ from ingest import docs, issues, repos
 from ingest.chunk import make_chunks
 
 DATA = Path(os.getenv("DATA_DIR", "data"))
-INTERVAL_S = int(os.getenv("REFRESH_INTERVAL_S", "600"))
+INTERVAL_S = int(os.getenv("REFRESH_INTERVAL_S", "3600"))
 DOCS_REPO = "olake-docs"
 MAX_DEPLOY_WAIT_CYCLES = 6  # ~1h for the website to pick up a docs commit
 # docs.scrape() skips pages that fail to download, so a scrape with fewer pages than this

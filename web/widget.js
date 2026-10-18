@@ -136,7 +136,7 @@
     '      <button class="icon-btn" data-act="clear" title="New chat" aria-label="Start a new chat">↺</button>' +
     '      <button class="icon-btn" data-act="close" title="Close" aria-label="Close chat">✕</button></header>' +
     '    <div class="log" aria-live="polite"></div>' +
-    '    <form><textarea rows="1" placeholder="Ask about OLake or OLake Fusion…" aria-label="Your question" maxlength="1000"></textarea>' +
+    '    <form><textarea rows="1" placeholder="Ask about OLake or OLake Fusion…" aria-label="Your question" maxlength="4000"></textarea>' +
     '      <button class="send" type="submit">Ask</button></form>' +
     '    <div class="foot">Answers are generated from the OLake docs and may be imperfect. Check the cited sources.</div>' +
     "  </section>" +

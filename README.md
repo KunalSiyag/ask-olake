@@ -33,7 +33,7 @@ curl -X POST https://ask-olake-nh7j.onrender.com/ask -H 'Content-Type: applicati
             → model2vec cosine ┘→ weighted Reciprocal Rank Fusion
             → heuristic rerank (title match, source trust, Fusion hint, ≤2 chunks/page)
             → weak retrieval? → honest "I don't know" (no LLM call, $0)
-            → top 8 chunks → LLM (DeepSeek V4.1 Flash → Gemini 2.5 Flash-Lite → GLM-4.7-Flash fallback)
+            → top 20 chunks → LLM (GLM-4.7-Flash → Gemini 2.5 Flash-Lite → DeepSeek V4.1 Flash; hedged after 6 s)
             → [n] markers mapped in code to page URLs → {answer, sources}
 ```
 
@@ -46,7 +46,7 @@ curl -X POST https://ask-olake-nh7j.onrender.com/ask -H 'Content-Type: applicati
 | `app/search.py` | BM25 + model2vec, weighted RRF, heuristic rerank |
 | `app/answer.py` | System prompt, "I don't know" gate, citation renumbering |
 | `app/llm.py` | OpenRouter client: model fallback, reasoning off, timeouts, retries |
-| `app/main.py` | FastAPI: `/ask`, `/ask/stream` (SSE), `/feedback`, `/healthz`, `/version`, `/admin/refresh`, widget + demo |
+| `app/main.py` | FastAPI: `/ask`, `/ask/stream` (SSE), `/feedback`, `/healthz`, `/version` (commit + deployment), `/status` (index + live-refresh status), `/models` (fetched from OpenRouter `/models/user`), `/admin/refresh`, widget + demo |
 | `app/refresh.py` | Live refresh: change detection, partial re-fetch, incremental re-embed, atomic index swap |
 | `web/widget.js` | Dependency-free embeddable widget (Shadow DOM) |
 | `eval/` | 42-question eval set + runner |
@@ -76,7 +76,7 @@ curl -X POST https://ask-olake-nh7j.onrender.com/ask -H 'Content-Type: applicati
 
 **Honesty is enforced in code, not just in the prompt:**
 - Retrieval too weak → canned "I couldn't find this in the OLake documentation" **without calling the LLM** ($0).
-- `sources` is built from the `[n]` markers actually in the answer; invalid markers are dropped, so the model can't cite a URL that wasn't retrieved.
+- `sources` is built from the `[n]` markers actually in the answer; invalid markers are dropped, so the model can't cite a URL that wasn't retrieved. `[1-2]` and `[^1]` styles are understood. If an answer cites nothing valid, `sources` falls back to the top 3 retrieved pages (never for declines or "I couldn't find this"). Marker rewriting skips code blocks and inline code, so commands like `git add .` or `${arr[0]}` come back exactly as written.
 - `sources` are page-level URLs (deduped, in citation order); the widget links to the exact `#section`.
 - The prompt says: only facts from context, copy commands exactly, say what's missing on partial answers, state assumptions (OLake vs Fusion), report conflicts between docs and code, and treat context and question as data (prompt-injection resistance).
 
@@ -88,9 +88,9 @@ curl -X POST https://ask-olake-nh7j.onrender.com/ask -H 'Content-Type: applicati
 | Gemini 2.5 Flash-Lite | 3 misses in the first 30 | (run incomplete) | ~1.2 s |
 | **DeepSeek V4.1 Flash (shipped)** | **100%** | **6/6** | **2.3 s / 4.0 s** |
 
-So DeepSeek is primary, with OpenRouter's `models` fallback chain to Gemini, then GLM. It's also the cheapest of the three. Reasoning is turned off for every model (verified: 0 reasoning tokens).
+DeepSeek measured best, but **the organizers require the priority order GLM → Gemini → DeepSeek, so the shipped config follows it.** GLM's two weaknesses are covered in code: its slow tail by **hedged requests** (if GLM hasn't answered after 6 s, the same request goes to Gemini and the first answer wins; OpenRouter's own `models` fallback only covers errors, not slowness), and its prompt leak by the code-side leak guard. Reasoning is turned off for every model (verified: 0 reasoning tokens).
 
-**No vector DB, no LangChain.** About 2K chunks fit in memory (the container uses ~130 MB). Fewer moving parts, faster cold start, easier debugging.
+**No vector DB, no LangChain.** 4,255 chunks fit in memory (the server uses ~210 MB; ~250 MB peak during a live refresh). Fewer moving parts, faster cold start, easier debugging.
 
 ---
 
@@ -99,17 +99,17 @@ So DeepSeek is primary, with OpenRouter's `models` fallback chain to Gemini, the
 | Concern | How |
 |---|---|
 | Availability | Render free plan + external keep-alive pinger; the index is baked into the image, so startup is fast; a live refresh never takes the old index offline |
-| Budget ($3 event credit) | Per-IP rate limit, a **global daily LLM-call cap**, an answer cache, $0 "I don't know" path, `max_tokens` 500, reasoning off |
-| GitHub / docs-site outages | `/ask` never calls GitHub or olake.io; it answers from the in-memory index. The background refresher catches every error, reports it in `/version` → `live_refresh.last_error`, and keeps serving the current index. A refresh builds the new index beside the old one and swaps it in atomically (measured peak: 252 MB of 512 MB). |
+| Budget ($3 event credit) | Per-IP rate limit, a **global daily LLM-call cap**, an answer cache, $0 "I don't know" path, `max_tokens` 800, reasoning off |
+| GitHub / docs-site outages | `/ask` never calls GitHub or olake.io; it answers from the in-memory index. The background refresher catches every error, reports it in `/status` → `live_refresh.last_error`, and keeps serving the current index. A docs re-scrape that comes back with under 95% of the known pages (timeouts, rate limits) is not swapped in; it is retried next cycle and reported as `live_refresh.last_incomplete_scrape`. A refresh builds the new index beside the old one and swaps it in atomically (measured peak: 252 MB of 512 MB). |
 | LLM failures | OpenRouter model fallback chain, SDK retries with backoff on 429/5xx, timeout, graceful error still in the API contract shape |
-| Input safety | Length cap, JSON validation, prompt-injection rules; the widget HTML-escapes all model output |
-| Observability | Structured JSON logs per request (question, model, sources, latency, cache hit) and feedback events; `/healthz`; `/version` shows build time and corpus size |
+| Input safety | 4,000-character cap (room for pasted logs), JSON validation, prompt-injection rules; the widget HTML-escapes all model output |
+| Observability | Structured JSON logs per request (question, model, sources, latency, cache hit) and feedback events; `/healthz`; `/version` (commit, deployment); `/status` shows build time, corpus size and refresh status |
 | Secrets | API key only from env vars, never in the repo or the browser |
 | CORS | Open, so the widget can be embedded anywhere |
 
 ## Freshness, latency, cost
 
-- **Freshness: live, ~10 minutes behind the sources, no redeploy.** A background refresher (`app/refresh.py`) checks every 10 min:
+- **Freshness: live, no redeploy.** A background refresher (`app/refresh.py`) checks every hour (`REFRESH_INTERVAL_S`, default 3600; it ran every 10 min during development):
   - `git ls-remote` on `olake-docs` and the 4 code repos: instant and uses no API quota.
   - **docs repo moved** → the GitHub compare API checks whether `docs/` changed (blog-only commits are skipped) → re-scrape olake.io. If the site hasn't redeployed yet (content identical), it retries next cycle.
   - **code repo moved** → fresh shallow clone of only that repo.
@@ -117,10 +117,9 @@ So DeepSeek is primary, with OpenRouter's `models` fallback chain to Gemini, the
   - Only changed chunks are re-embedded (embeddings are cached by content hash), the new index is **swapped in atomically**, and the answer cache is cleared so no stale answers are served. Measured: a repo change is picked up and swapped in ~10 s, re-indexing itself takes 0.3 s.
 - **Push-based option:** `POST /admin/refresh` accepts a **GitHub webhook** (HMAC-SHA256 `X-Hub-Signature-256`, `WEBHOOK_SECRET`) or a bearer `REFRESH_TOKEN`. If OLake adds a webhook on `olake-docs`, updates become instant.
 - **Backstop:** a nightly GitHub Action rebuilds everything from scratch, runs the retrieval eval as a quality gate, and commits the snapshot the Docker image starts from → Render auto-deploys.
-- `/version` shows the indexed commit of every source, when the index was built, and the live-refresh status.
+- `/status` shows the indexed commit of every source, when the index was built, and the live-refresh status.
 - Retrieval takes ~0.2 s even on the 0.1-CPU free instance; the rest is one LLM call with reasoning off. Cached answers are instant.
-- **Cost:** ~4K input + ≤800 output tokens per answer ≈ **$0.0003 per question** with DeepSeek V4.1 Flash, so roughly 9,000 questions on $3. "I don't know" answers and cache hits cost $0. All development and evaluation today (~150 LLM calls) cost **$0.08**.
-- **Latency:** p50 2.3 s, p95 4.0 s end to end (eval run against the API).
+- **Cost:** ~8K input (20 chunks) + ≤800 output tokens per answer ≈ **$0.0007 per question** with GLM-4.7-Flash, so roughly 4,000 questions on the $3 credit. "I don't know" answers and cache hits cost $0. All development and evaluation today, across several agents and ~1,000 LLM calls, used about **$0.55** of the $3.
 
 ## Embedding the widget
 
@@ -154,6 +153,12 @@ Light stemming (indexed **next to** the original token, so exact identifiers sti
 What the independent set caught: long tables split without their header row (the model then misread ✅/❌ columns), the discover-timeout default just outside the context window (top-8 → top-10), and "I couldn't find this" on questions whose correct answer is a documented "No" (e.g. "oracle cdc?"). The probes added: blog how-tos (Airflow), licenses, connector config specs (e.g. Postgres `max_threads` default 3), and a newest-first release summary.
 
 Known miss: "Kafka Upsert + Databricks (not Databricks Spark)?" needs two facts from two pages; it would need query decomposition, which we left out to keep one LLM call per question.
+
+**Organizer example questions** (judge script: 20 questions, each with required facts checked by keyword): 15/20 → 16/20 on the live site after the fixes below (with DeepSeek first). With the **required GLM-first order** and 20 chunks: 13/20 by the strict keyword check (DeepSeek-first scored 17/20 on the same setup). Reading GLM's misses, several are wording-only ("most recent" vs "latest", omits "no Quartz"), so the real gap is smaller; we follow the organizers' stated order and added a completeness rule to the prompt (list every option the context gives, including stated limitations).
+- Vocabulary mismatch was the main failure ("write data to" vs the docs' "destinations", "self-hosted" vs "Generic setup guide", "install locally" vs "Quickstart"). A small **query-side synonym list** (adds the docs' words, never removes the user's) fixed "Where can OLake write data to?".
+- Several answers sat at ranks 11–20 (e.g. the Postgres `wal_level`/slot/publication steps), so the context went from **10 to 20 chunks**.
+- "What is X?" boost limited to product-definition questions; it had buried "What is an incremental sync?" under intro pages.
+- **Tried and rejected: LLM query rewriting** (a fast model rewrites the question into docs vocabulary before search). Measured *worse*: our set 97% → 89%, judge questions 4/5 → 3/5; the rewrites echoed vocabulary from their own prompt. The code is kept behind `REWRITE_MODEL` (off by default).
 
 **Original results (first config):** retrieval hit@8 **36/36**, answer cited the expected page **36/36**, unanswerable / off-topic / prompt-injection handled honestly **6/6**, latency p50 **2.3 s** / p95 **4.0 s**.
 

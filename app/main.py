@@ -22,6 +22,7 @@ from pathlib import Path
 
 from contextlib import asynccontextmanager
 
+import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
@@ -244,8 +245,29 @@ async def healthz():
 
 @app.get("/version")
 async def version():
+    """Exactly the organizers' contract: which commit and deployment are live, read from the
+    platform's environment at call time (Render names first, Vercel names as fallback)."""
+    return {
+        "commit": os.getenv("RENDER_GIT_COMMIT") or os.getenv("VERCEL_GIT_COMMIT_SHA") or "",
+        "deployment": os.getenv("RENDER_INSTANCE_ID") or os.getenv("VERCEL_DEPLOYMENT_ID") or os.getenv("RENDER_SERVICE_ID") or "",
+    }
+
+
+@app.get("/status")
+async def status():
     return {**META, "model": config.LLM_MODEL, "fallback_models": config.LLM_FALLBACK_MODELS,
             "embeddings": index.model is not None, "live_refresh": refresher.status}
+
+
+@app.get("/models")
+async def models():
+    """Models this deployment's key may use, as reported by OpenRouter (not a typed-out list)."""
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.get(f"{config.LLM_BASE_URL}/models/user",
+                                headers={"Authorization": f"Bearer {config.OPENROUTER_API_KEY}"})
+    if resp.status_code != 200:
+        raise HTTPException(502, "Could not fetch models from OpenRouter")
+    return {"models": [m["id"] for m in resp.json().get("data", [])]}
 
 
 def refresh_authorized(request: Request, body: bytes) -> bool:

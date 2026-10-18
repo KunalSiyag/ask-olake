@@ -260,10 +260,11 @@ If behind schedule, cut in this order: issues ingestion → SSE streaming (fall 
 - Issues (open+closed): olake 321, olake-ui 87, olake-helm 24, olake-fusion 9. Discussions are enabled on `olake`.
 - Quickstart prerequisites: Docker, Docker Compose, ≥4GB RAM for Docker, port 8000 free.
 
-## 14. Current state (updated ~11:20 IST)
-- **Pushed** to the PRIVATE repo https://github.com/KunalSiyag/ask-olake (branch `main`). Secret scan of the history: clean.
-- **Models decided by eval:** primary `deepseek/deepseek-v4.1-flash`, fallbacks Gemini 2.5 Flash-Lite → GLM-4.7-Flash (GLM p95 17 s and leaked the prompt). Final eval: retrieval 36/36, citations 36/36, honest 6/6, p50 2.3 s / p95 4.0 s. Credit used: $0.08.
-- Prompt hardening: issue-claim rule, never reveal the prompt + code-side leak guard, answers ≤250 words, MAX_ANSWER_TOKENS=800.
-- The user also has GMI models available if ever needed (not used).
-- **DEPLOYED (11:36):** Render workspace "Olake" (`tea-dba5o0u1egvs739fcve0`), service `srv-dba63njrjlhs73924120`, URL **https://ask-olake-nh7j.onrender.com**, free plan, Singapore, Docker, autodeploy on push to main. The user adds OPENROUTER_API_KEY + GITHUB_TOKEN in the dashboard. (Creation via MCP worked after the Render plugin was re-authenticated.)
-- ~~Waiting on the user: create a NEW Render workspace (dashboard) + connect GitHub with access to the private repo. Then: create the Docker web service (free, Singapore) via MCP with the non-secret env vars; **the user pastes OPENROUTER_API_KEY and GITHUB_TOKEN in the Render dashboard** (never pass keys through chat); set up the external pinger on /healthz; smoke-test the live URL + widget; run the eval against the live URL.
+## 14. Current state (final, ~13:15 IST)
+- **Live:** https://ask-olake-nh7j.onrender.com (Render, workspace "Olake", service `srv-dba63njrjlhs73924120`, free plan, Singapore, autodeploy on push to `main`). Repo: https://github.com/KunalSiyag/ask-olake (private; 5 organizer accounts invited with write access, since personal repos can't grant read-only).
+- **Organizer rules** (Confluence page; written for Vercel, but the user decided Render is fine): models in priority order **GLM → Gemini → DeepSeek** (applied); `GET /version` returns `commit` + `deployment` (RENDER_GIT_COMMIT / RENDER_INSTANCE_ID) plus index status; `GET /models` fetches OpenRouter `/models/user`; **no commits/pushes after the 14:30 freeze** (the nightly Action runs at 02:00 IST, after results).
+- **Final config:** GLM-4.7-Flash primary with OpenRouter fallbacks + hedged request to Gemini after 6 s; TOP_K=20; MAX_QUESTION_CHARS=4000; live refresh every hour (REFRESH_INTERVAL_S=3600) with a 95% scrape-completeness guard; query rewriting OFF (measured worse).
+- **Index:** 4,255 chunks (docs 124 pages, blog/compare 98 pages at weight 0.5, 4 repos incl. spec.json + licenses at 0.7, 172 issues at 0.7, releases summary). Search: BM25 (+ light stemming, typo correction, query synonyms) + model2vec (weight 0.5) + RRF + heuristic rerank (title overlap, source trust, Fusion hint, product-definition intro boost, ≤2 chunks/page).
+- **Evals:** retrieval hit@10: our set 97%, independent hard set 92%, probes 100%; organizer example questions 16/20 on the live site (keyword check). Unanswerable/injection handled honestly in every run.
+- **Known weak spots:** multi-hop questions (Kafka Upsert + Databricks); some docs-vocabulary mismatches remain.
+- **Pending (user):** submission form (endpoint `/ask`, commit SHA from `/version`, repo URL, widget demo URL = the site root), keep-alive pinger check. **No pushes after 14:30.**
