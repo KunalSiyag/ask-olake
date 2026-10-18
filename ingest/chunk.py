@@ -28,11 +28,35 @@ def _split_long(text: str) -> list[str]:
         cur = f"{cur}\n\n{block}" if cur else block
     if cur:
         pieces.append(cur)
-    # a single block (e.g. a huge code sample) may still exceed the limit: hard-cut it
+    # a single block may still exceed the limit: tables are split by rows with the header
+    # row repeated (a headerless row of ✅/❌ is meaningless), anything else is hard-cut
     out = []
     for p in pieces:
-        out.extend(p[i:i + MAX_CHARS] for i in range(0, len(p), MAX_CHARS))
+        if len(p) <= MAX_CHARS:
+            out.append(p)
+        elif _is_table(p):
+            out.extend(_split_table(p))
+        else:
+            out.extend(p[i:i + MAX_CHARS] for i in range(0, len(p), MAX_CHARS))
     return out
+
+
+def _is_table(text: str) -> bool:
+    lines = [line for line in text.strip().split("\n") if line.strip()]
+    return len(lines) > 2 and sum(line.lstrip().startswith("|") for line in lines) >= 0.8 * len(lines)
+
+
+def _split_table(text: str) -> list[str]:
+    lines = [line for line in text.strip().split("\n") if line.strip()]
+    header, rows = lines[0], lines[1:]
+    pieces, cur = [], [header]
+    for row in rows:
+        if len(cur) > 1 and sum(len(r) + 1 for r in cur) + len(row) > MAX_CHARS:
+            pieces.append("\n".join(cur))
+            cur = [header]
+        cur.append(row)
+    pieces.append("\n".join(cur))
+    return pieces
 
 
 def make_chunks(sections: list[dict]) -> list[dict]:

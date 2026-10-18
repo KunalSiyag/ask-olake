@@ -8,13 +8,15 @@ and should get an "I don't know" or a polite decline.
 """
 
 import json
+import os
 import statistics
 import sys
 import time
 
 import httpx
 
-QUESTIONS = [json.loads(line) for line in open("eval/questions.jsonl")]
+EVAL_FILE = os.getenv("EVAL_FILE", "eval/questions.jsonl")  # e.g. eval/hard_questions.jsonl
+QUESTIONS = [json.loads(line) for line in open(EVAL_FILE)]
 IDK_MARKERS = ("couldn't find", "could not find", "can't help", "cannot help", "not covered", "doesn't mention",
                "does not mention", "no information", "only answer", "only help", "not able to", "don't have")
 
@@ -55,6 +57,7 @@ def retrieval(k: int = 8) -> None:
 
 def answer(base: str) -> None:
     lat, cite_hit, total, idk_ok, idk_total, wrong_idk = [], 0, 0, 0, 0, 0
+    facts_hit, facts_total, transcript = 0, 0, []
     with httpx.Client(timeout=60) as client:
         for q in QUESTIONS:
             t = time.perf_counter()
@@ -65,6 +68,12 @@ def answer(base: str) -> None:
                 print(f"HTTP {r.status_code} for {q['question']!r}: {str(body)[:120]}")
                 body = {"answer": "", "sources": []}
             idk = says_idk(body["answer"])
+            transcript.append({**q, "answer": body["answer"], "sources": body["sources"]})
+            facts = q.get("must_mention") or []
+            found = [f for f in facts if f.lower() in body["answer"].lower()]
+            if q["expected"] and facts:
+                facts_hit += len(found)
+                facts_total += len(facts)
             if q["expected"]:
                 total += 1
                 ok = any(s in q["expected"] for s in body["sources"])
@@ -77,6 +86,12 @@ def answer(base: str) -> None:
                 idk_total += 1
                 idk_ok += idk
                 print(f"{'IDK ' if idk else 'ANSW'}      {lat[-1]:5.1f}s  {q['question']}\n        -> {body['answer'][:160]!r}")
+    out = EVAL_FILE.replace(".jsonl", ".answers.jsonl")
+    with open(out, "w") as f:
+        for t in transcript:
+            f.write(json.dumps(t, ensure_ascii=False) + "\n")
+    if facts_total:
+        print(f"must_mention facts found verbatim: {facts_hit}/{facts_total} (paraphrases need manual review: {out})")
     lat.sort()
     print(f"\ncitation hit: {cite_hit}/{total} = {cite_hit / total:.0%}   false 'I don't know': {wrong_idk}")
     print(f"unanswerable handled honestly: {idk_ok}/{idk_total}")

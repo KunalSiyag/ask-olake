@@ -14,7 +14,7 @@ MAX_ANSWER_TOKENS = int(os.getenv("MAX_ANSWER_TOKENS", "800"))
 LLM_TIMEOUT_S = float(os.getenv("LLM_TIMEOUT_S", "25"))
 HEDGE_AFTER_S = float(os.getenv("HEDGE_AFTER_S", "6"))  # 0 disables hedged requests
 
-TOP_K = int(os.getenv("TOP_K", "8"))
+TOP_K = int(os.getenv("TOP_K", "10"))
 MAX_QUESTION_CHARS = int(os.getenv("MAX_QUESTION_CHARS", "1000"))
 
 # Abuse / budget guards. The graders send the test set from one IP, so the per-IP
