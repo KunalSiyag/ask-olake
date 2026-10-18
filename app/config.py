@@ -6,9 +6,11 @@ load_dotenv()
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://openrouter.ai/api/v1")
-LLM_MODEL = os.getenv("LLM_MODEL", "z-ai/glm-4.7-flash")
-LLM_FALLBACK_MODELS = [m.strip() for m in os.getenv("LLM_FALLBACK_MODELS", "").split(",") if m.strip()]
-MAX_ANSWER_TOKENS = int(os.getenv("MAX_ANSWER_TOKENS", "500"))
+# Order chosen by eval (README): DeepSeek was most accurate and fast; GLM was slow (p95 17 s)
+LLM_MODEL = os.getenv("LLM_MODEL", "deepseek/deepseek-v4.1-flash")
+LLM_FALLBACK_MODELS = [m.strip() for m in os.getenv(
+    "LLM_FALLBACK_MODELS", "google/gemini-2.5-flash-lite,z-ai/glm-4.7-flash").split(",") if m.strip()]
+MAX_ANSWER_TOKENS = int(os.getenv("MAX_ANSWER_TOKENS", "800"))
 LLM_TIMEOUT_S = float(os.getenv("LLM_TIMEOUT_S", "25"))
 
 TOP_K = int(os.getenv("TOP_K", "8"))
