@@ -1,0 +1,5 @@
+{"question": "Where can OLake write data to?", "expected": ["https://olake.io/docs/", "https://olake.io/docs/writers/parquet/config/", "https://olake.io/docs/core/use-cases/"]}
+{"question": "What is an incremental sync in OLake?", "expected": ["https://olake.io/docs/understanding/terminologies/olake/", "https://olake.io/docs/getting-started/creating-first-pipeline/"]}
+{"question": "Is OLake CDC a continuously running process?", "expected": ["https://olake.io/docs/understanding/terminologies/general/", "https://olake.io/docs/connectors/postgres/", "https://olake.io/docs/connectors/mysql/"]}
+{"question": "What do I need to configure on a self-hosted PostgreSQL server to use CDC with OLake?", "expected": ["https://olake.io/docs/connectors/postgres/setup/generic/"]}
+{"question": "How do I install OLake UI locally, and what are the default login details?", "expected": ["https://olake.io/docs/getting-started/quickstart/", "https://olake.io/docs/install/olake-ui/", "https://olake.io/docs/getting-started/olake-ui/"]}

@@ -140,8 +140,13 @@ def no_llm_result(text: str, hits) -> dict:
             "candidates": [h.chunk["url"] for h in hits[:3]]}
 
 
+async def retrieve(question: str):
+    rewrite = await llm.rewrite_query(question) if config.REWRITE_MODEL else None
+    return index.search(question, k=config.TOP_K, alt_query=rewrite), rewrite
+
+
 async def answer_question(question: str) -> dict:
-    hits = index.search(question, k=config.TOP_K)
+    hits, rewrite = await retrieve(question)
     if answer.is_weak(hits):
         return no_llm_result(answer.IDK_ANSWER, hits)
     if not take_llm_budget():
@@ -191,7 +196,7 @@ async def ask_stream(body: AskRequest, request: Request):
         started = time.perf_counter()
         result = cached
         if result is None:
-            hits = index.search(question, k=config.TOP_K)
+            hits, _ = await retrieve(question)
             if answer.is_weak(hits):
                 result = no_llm_result(answer.IDK_ANSWER, hits)
             elif not take_llm_budget():

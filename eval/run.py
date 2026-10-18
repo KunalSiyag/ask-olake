@@ -36,8 +36,14 @@ def retrieval(k: int = 10) -> None:  # matches config.TOP_K
 
     index = SearchIndex()
     hit, total, gated_ok, gated_total, rr = 0, 0, 0, 0, 0.0
+    rewrite = None
+    if os.getenv("EVAL_REWRITE") == "1":  # include the LLM query-rewrite step (tiny cost)
+        import asyncio
+
+        from app import llm
+        rewrite = lambda text: asyncio.run(llm.rewrite_query(text))  # noqa: E731
     for q in QUESTIONS:
-        hits = index.search(q["question"], k=k)
+        hits = index.search(q["question"], k=k, alt_query=rewrite(q["question"]) if rewrite else None)
         pages = [h.chunk["page_url"] for h in hits]
         weak = ans.is_weak(hits)
         top = f"bm25={hits[0].bm25:.1f} cos={hits[0].cosine:.2f}" if hits else "-"

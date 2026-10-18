@@ -13,6 +13,9 @@ LLM_FALLBACK_MODELS = [m.strip() for m in os.getenv(
 MAX_ANSWER_TOKENS = int(os.getenv("MAX_ANSWER_TOKENS", "800"))
 LLM_TIMEOUT_S = float(os.getenv("LLM_TIMEOUT_S", "25"))
 HEDGE_AFTER_S = float(os.getenv("HEDGE_AFTER_S", "6"))  # 0 disables hedged requests
+# Optional query rewriting into docs vocabulary, e.g. REWRITE_MODEL=google/gemini-2.5-flash-lite
+REWRITE_MODEL = os.getenv("REWRITE_MODEL", "")  # off: measured worse (97%->89% on our set); see README
+REWRITE_TIMEOUT_S = float(os.getenv("REWRITE_TIMEOUT_S", "3"))
 
 TOP_K = int(os.getenv("TOP_K", "10"))
 MAX_QUESTION_CHARS = int(os.getenv("MAX_QUESTION_CHARS", "1000"))

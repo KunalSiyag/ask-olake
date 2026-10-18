@@ -78,3 +78,27 @@ async def stream(messages: list[dict]) -> AsyncIterator[tuple[str, str]]:
     async for chunk in chunks:
         if chunk.choices and chunk.choices[0].delta.content:
             yield chunk.choices[0].delta.content, chunk.model
+
+
+REWRITE_PROMPT = """You turn a user's question about OLake into a search query for the OLake documentation.
+OLake docs vocabulary: OLake Go (ingestion), sources/connectors (Postgres, MySQL, MongoDB, Oracle, MSSQL, DB2, Kafka, S3),
+destinations/writers (Apache Iceberg, Parquet, S3, GCS, ADLS), catalogs (Glue, Hive, JDBC, REST, Nessie, Polaris, Unity, S3 Tables),
+sync modes (Full Refresh, Full Refresh + Incremental, Full Refresh + CDC, CDC Only, Strict CDC), cursor field, state.json, streams.json,
+source.json, destination.json, replication slot, publication, pgoutput, wal_level, binlog, oplog, replica set, OLake UI (Docker Compose
+quickstart, docker-compose, localhost:8000), Helm/Kubernetes, OLake Fusion (Iceberg table maintenance, compaction Lite/Medium/Full).
+Generic setup guides are called "Generic ... Setup Guide" (self-hosted / on-prem servers).
+Reply with ONE line of 5-15 search keywords using the docs' terms (no sentences, no explanation)."""
+
+
+async def rewrite_query(question: str) -> str | None:
+    """Docs-vocabulary keywords for the question, or None if the call fails or is slow.
+    Retrieval falls back to the original question, so this can only add recall."""
+    try:
+        resp = await asyncio.wait_for(_client.chat.completions.create(
+            model=config.REWRITE_MODEL, max_tokens=60, temperature=0,
+            messages=[{"role": "system", "content": REWRITE_PROMPT}, {"role": "user", "content": question[:1000]}],
+            extra_body={"reasoning": {"effort": "none"}}), timeout=config.REWRITE_TIMEOUT_S)
+        text = (resp.choices[0].message.content or "").strip().splitlines()[0][:300]
+        return text or None
+    except Exception:
+        return None

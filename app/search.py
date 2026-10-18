@@ -61,6 +61,7 @@ def tokenize(text: str) -> list[str]:
 
 
 DEFINITION_Q = re.compile(r"^\s*(what\s+(is|are|'s)|what's|whats|explain|tell me about|define|describe|overview of)\b", re.I)
+PRODUCT_WORDS = {"olake", "fusion", "go", "ui", "olake-ui", "olake-go", "olake-fusion", "datazip", "platform", "tool", "product"}
 INTRO_URL = re.compile(r"(olake\.io/docs/$|/overview/|/introduction/|/getting-started/overview|/core/architecture/|/use-cases/)")
 INTRO_HEADING = re.compile(r"\b(what is|what are|overview|introduction|welcome)\b", re.I)
 
@@ -150,7 +151,33 @@ class SearchIndex:
             out.append(match[0] if match else tok)
         return out
 
-    def search(self, query: str, k: int = 8, per_page: int = 2, pool: int = 50) -> list[Hit]:
+    def search(self, query: str, k: int = 8, per_page: int = 2, pool: int = 50, alt_query: str | None = None) -> list[Hit]:
+        """Search for `query`; with `alt_query` (an LLM rewrite in docs vocabulary) both rankings
+        are fused, so the rewrite can add recall without displacing exact matches of the original."""
+        if not alt_query:
+            return self._search(query, k, per_page, pool)
+        a = self._search(query, k=pool, per_page=per_page, pool=pool)
+        b = self._search(alt_query, k=pool, per_page=per_page, pool=pool)
+        fused: dict[int, list] = {}
+        for weight, hits in ((1.0, a), (1.0, b)):
+            for rank, h in enumerate(hits):
+                entry = fused.setdefault(h.chunk["id"], [0.0, h])
+                entry[0] += weight / (RRF_K + rank + 1)
+                if h.bm25 > entry[1].bm25 or h.cosine > entry[1].cosine:
+                    entry[1] = Hit(h.chunk, h.score, max(h.bm25, entry[1].bm25), max(h.cosine, entry[1].cosine))
+        ranked = sorted(fused.values(), key=lambda e: -e[0])
+        out, per_page_count = [], {}
+        for score, h in ranked:
+            page = h.chunk["page_url"]
+            if per_page_count.get(page, 0) >= per_page:
+                continue
+            per_page_count[page] = per_page_count.get(page, 0) + 1
+            out.append(Hit(h.chunk, score, h.bm25, h.cosine))
+            if len(out) == k:
+                break
+        return out
+
+    def _search(self, query: str, k: int, per_page: int, pool: int) -> list[Hit]:
         q_tokens = self.correct(tokenize(query))
         bm25 = self.bm25.get_scores(q_tokens) if q_tokens else np.zeros(len(self.chunks))
         rankings = [np.argsort(-bm25)[:pool]]
@@ -163,7 +190,9 @@ class SearchIndex:
             rankings.append(np.argsort(-cosine)[:pool])
 
         weights = [1.0, EMB_WEIGHT][: len(rankings)]
-        definition = bool(DEFINITION_Q.match(query))
+        # only "what is OLake / Fusion / the UI?" style questions: for "what is an incremental sync?"
+        # the intro pages are the wrong answer (the boost would bury the real explanation)
+        definition = bool(DEFINITION_Q.match(query)) and set(q_tokens) <= PRODUCT_WORDS
         if definition:
             # "what is X?" questions whose only content word is everywhere (e.g. "olake") never
             # surface the intro pages on their own, so rank intro/overview sections as a third list
