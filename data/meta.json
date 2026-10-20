@@ -1,12 +1,12 @@
 {
-  "built_at": "2026-10-19T23:52:37+00:00",
-  "chunks": 4255,
-  "pages": 507,
+  "built_at": "2026-10-20T23:19:07+00:00",
+  "chunks": 4256,
+  "pages": 508,
   "by_source": {
     "blog": 2048,
     "docs": 1269,
     "repo": 729,
-    "issue": 209
+    "issue": 210
   },
   "embedding_model": "minishlab/potion-base-8M",
   "heads": {
@@ -16,5 +16,5 @@
     "olake-helm": "c63f10c48cd4dc2cbe3a130c6190ccedf0dafa83",
     "olake-fusion": "15ca160b298bf038f78f6639ec7aae67e4d4e33a"
   },
-  "issues_checked_at": "2026-10-19T23:51:07+00:00"
+  "issues_checked_at": "2026-10-20T23:17:18+00:00"
 }
