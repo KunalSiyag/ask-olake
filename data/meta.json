@@ -1,20 +1,20 @@
 {
-  "built_at": "2026-10-20T23:19:07+00:00",
-  "chunks": 4256,
-  "pages": 508,
+  "built_at": "2026-10-21T23:32:12+00:00",
+  "chunks": 4302,
+  "pages": 510,
   "by_source": {
-    "blog": 2048,
-    "docs": 1269,
-    "repo": 729,
-    "issue": 210
+    "blog": 2050,
+    "docs": 1311,
+    "repo": 730,
+    "issue": 211
   },
   "embedding_model": "minishlab/potion-base-8M",
   "heads": {
-    "olake-docs": "303b7c8a80c8095c918f471486709a1a0f204ead",
-    "olake": "7ecb3b8f5f3dc82ede939ed0a065487d889166a7",
-    "olake-ui": "372c43d618e36d83e8a0732935d3d926a377fc9f",
-    "olake-helm": "c63f10c48cd4dc2cbe3a130c6190ccedf0dafa83",
-    "olake-fusion": "15ca160b298bf038f78f6639ec7aae67e4d4e33a"
+    "olake-docs": "67b6e1e73d78e93af37b751b1fd575ac50382257",
+    "olake": "73d065d46e0968b0f4009b19af9a741a64c9e848",
+    "olake-ui": "6ff4fcbcfa236a8a6dbf4acdd656783de83b185b",
+    "olake-helm": "5bb226c1cf1ce67a39e18519a6262d041c5e287c",
+    "olake-fusion": "81e3c8ce2808de4e2fea66bdcfa6c9d63900249d"
   },
-  "issues_checked_at": "2026-10-20T23:17:18+00:00"
+  "issues_checked_at": "2026-10-21T23:30:43+00:00"
 }
