@@ -1,20 +1,20 @@
 {
-  "built_at": "2026-10-29T00:12:54+00:00",
-  "chunks": 4684,
-  "pages": 527,
+  "built_at": "2026-10-30T00:06:33+00:00",
+  "chunks": 4727,
+  "pages": 529,
   "by_source": {
     "blog": 2385,
     "docs": 1350,
-    "repo": 732,
+    "repo": 775,
     "issue": 217
   },
   "embedding_model": "minishlab/potion-base-8M",
   "heads": {
-    "olake-docs": "4433f884ecd1d662f3dc532408fc12038c4c44cc",
+    "olake-docs": "41c2218174b88d0ffaf52d29ad47f4893b717d9c",
     "olake": "942b9ce04c83fc93f15e7800da35f02595f84609",
-    "olake-ui": "252b267570a22bfa76ddfa299a8157ac009fb19d",
-    "olake-helm": "775b8de5b1242919e4c9d1373f6453c575949f51",
-    "olake-fusion": "99bdf970d7104f2db6f7ed060b64f9bb7cf0ec29"
+    "olake-ui": "b29fdaac65eff7bace0b8f8cf522ded897256cff",
+    "olake-helm": "b40bcb6391dec15166b248b897f0af618a70f2d7",
+    "olake-fusion": "9b32d37acafbb8ae3def6b28776a2e8aaa6f535a"
   },
-  "issues_checked_at": "2026-10-29T00:10:58+00:00"
+  "issues_checked_at": "2026-10-30T00:04:46+00:00"
 }
